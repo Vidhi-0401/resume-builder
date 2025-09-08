@@ -21,15 +21,23 @@ export default function SignIn() {
 
       if (res.ok) {
         const data = await res.json();
-        // Save token/session in localStorage (or cookies)
-        localStorage.setItem("token", data.token);
-        // Redirect to homepage
-        window.location.href = "/";
+
+        // ✅ Save user info in localStorage (but NOT the token, since it's in HttpOnly cookie)
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        // ✅ Redirect based on role
+        if (data.user.role === "admin") {
+          router.push("/admin/templates");
+        } else {
+          router.push("/"); // or /editor
+        }
       } else {
-        alert("Invalid credentials");
+        const error = await res.json();
+        alert(error.error || "Invalid credentials");
       }
     } catch (error) {
       console.error(error);
+      alert("Something went wrong");
     }
   };
 
@@ -48,10 +56,7 @@ export default function SignIn() {
           <form onSubmit={handleSubmit} className="mx-auto max-w-[400px]">
             <div className="space-y-5">
               <div>
-                <label
-                  className="mb-1 block text-sm font-medium text-indigo-200/65"
-                  htmlFor="email"
-                >
+                <label className="mb-1 block text-sm font-medium text-indigo-200/65" htmlFor="email">
                   Email
                 </label>
                 <input
@@ -65,16 +70,10 @@ export default function SignIn() {
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between gap-3">
-                  <label
-                    className="block text-sm font-medium text-indigo-200/65"
-                    htmlFor="password"
-                  >
+                  <label className="block text-sm font-medium text-indigo-200/65" htmlFor="password">
                     Password
                   </label>
-                  <Link
-                    className="text-sm text-gray-600 hover:underline"
-                    href="/reset-password"
-                  >
+                  <Link className="text-sm text-gray-600 hover:underline" href="/reset-password">
                     Forgot?
                   </Link>
                 </div>
@@ -95,15 +94,6 @@ export default function SignIn() {
               >
                 Sign in
               </button>
-              {/* <div className="flex items-center gap-3 text-center text-sm italic text-gray-600 before:h-px before:flex-1 before:bg-linear-to-r before:from-transparent before:via-gray-400/25 after:h-px after:flex-1 after:bg-linear-to-r after:from-transparent after:via-gray-400/25">
-                or
-              </div> */}
-              {/* <button
-                type="button"
-                className="btn relative w-full bg-linear-to-b from-gray-800 to-gray-800/60 text-gray-300"
-              >
-                Sign In with Google
-              </button> */}
             </div>
           </form>
 

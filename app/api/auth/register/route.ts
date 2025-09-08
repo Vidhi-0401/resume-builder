@@ -1,16 +1,17 @@
 // app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
-import { connectToDB } from "@/lib/mongoose"; // adjust to "../../../lib/mongoose" if you don't use the "@" alias
+import { connectToDB } from "@/lib/mongoose";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 
-export const runtime = "nodejs"; // ensure Node.js runtime for Mongoose. Default is nodejs. :contentReference[oaicite:0]{index=0}
+export const runtime = "nodejs";
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL as string;
 
 export async function POST(req: Request) {
   try {
     const { name, company, email, password } = await req.json();
 
-    // Basic validation
     if (!name || !email || !password) {
       return NextResponse.json({ error: "Name, email, and password are required." }, { status: 400 });
     }
@@ -26,10 +27,17 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, company, email, passwordHash });
+
+    const user = await User.create({
+      name,
+      company,
+      email,
+      passwordHash,
+      role: email === ADMIN_EMAIL ? "admin" : "user", // ✅ assign role here
+    });
 
     return NextResponse.json(
-      { id: user._id, name: user.name, email: user.email },
+      { id: user._id, name: user.name, email: user.email, role: user.role },
       { status: 201 }
     );
   } catch (err) {
