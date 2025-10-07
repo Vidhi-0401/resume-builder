@@ -27,9 +27,9 @@ export default function SignIn() {
 
         // ✅ Redirect based on role
         if (data.user.role === "admin") {
-          router.push("/admin");
+          window.location.href = ("/admin");
         } else {
-          router.push("/"); // or /editor
+          window.location.href = ("/"); // or /editor
         }
       } else {
         const error = await res.json();

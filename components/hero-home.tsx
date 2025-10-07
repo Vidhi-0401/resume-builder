@@ -8,22 +8,29 @@ import ModalVideo from "@/components/modal-video";
 export default function HeroHome() {
   const router = useRouter();
 
-  const handleStartBuilding = () => {
-    const token = localStorage.getItem("token");
-
-    // if (token) {
-    //   router.push("/templates"); // user signed in
-    // } else {
-    //   const confirmSignIn = window.confirm(
-    //     "You need to sign in first to start building your resume. Do you want to sign in now?"
-    //   );
-
-    //   if (confirmSignIn) {
-    //     router.push("/signin");
-    //   }
-    // }
-      router.push("/templates");
-
+  const handleStartBuilding = async () => {
+    try {
+      // Check authentication by calling /api/auth/me
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.ok) {
+        window.location.href = ("/templates"); // user signed in
+      } else {
+        const confirmSignIn = window.confirm(
+          "You need to sign in first to start building your resume. Do you want to sign in now?"
+        );
+        if (confirmSignIn) {
+          window.location.href = ("/signin");
+        }
+      }
+    } catch (error) {
+      // fallback: treat as not signed in
+      const confirmSignIn = window.confirm(
+        "You need to sign in first to start building your resume. Do you want to sign in now?"
+      );
+      if (confirmSignIn) {
+        window.location.href = ("/signin");
+      }
+    }
   };
 
   return (
