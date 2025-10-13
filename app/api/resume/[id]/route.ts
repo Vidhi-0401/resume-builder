@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = context.params; // ✅ fixed (no await)
+  const { id } = await context.params; // await params per Next.js dynamic API handlers
     await connectToDB();
 
     const resume = await Resume.findOne({ _id: id, userId: user.id });
@@ -40,7 +40,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = context.params; // ✅ fixed (no await)
+  const { id } = await context.params;
     const body = await req.json();
 
     await connectToDB();
@@ -73,7 +73,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = context.params; // ✅ fixed (no await)
+  const { id } = await context.params;
     await connectToDB();
 
     const deleted = await Resume.findOneAndDelete({ _id: id, userId: user.id });
