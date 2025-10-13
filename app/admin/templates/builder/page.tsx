@@ -18,17 +18,16 @@ import {
 import SortableItem from "@/components/dnd/SortableItem";
 
 type SectionDef = {
-  id: string; // key that matches Resume schema
+  id: string;
   label: string;
 };
 
 type PlacedSection = {
-  uid: string; // unique instance id for drag/drop
-  id: string; // logical id (schema key)
-  label: string; // human label
+  uid: string;
+  id: string;
+  label: string;
 };
 
-// ✅ Map of available sections (linked to Resume schema)
 const AVAILABLE: SectionDef[] = [
   { id: "profile", label: "Profile" },
   { id: "education", label: "Education" },
@@ -38,9 +37,12 @@ const AVAILABLE: SectionDef[] = [
   { id: "certifications", label: "Certifications" },
   { id: "languages", label: "Languages" },
   { id: "hobbies", label: "Hobbies" },
-  { id: "contact", label: "Contact Info" }, // maps name/email/phone
+  { id: "contact", label: "Contact Info" },
   { id: "links", label: "Links (LinkedIn/GitHub)" },
 ];
+
+const LAYOUT_STYLES = ["Modern", "Classic", "Minimal", "Creative"];
+const BACKGROUND_STYLES = ["Light", "Dark", "Gradient", "Pattern"];
 
 function makeUid(base: string) {
   return `${base}-${Date.now().toString(36)}-${Math.random()
@@ -55,6 +57,8 @@ export default function TemplateBuilderPage() {
 
   const [template, setTemplate] = useState<any | null>(null);
   const [sections, setSections] = useState<PlacedSection[]>([]);
+  const [layoutStyle, setLayoutStyle] = useState<string>("Modern");
+  const [backgroundStyle, setBackgroundStyle] = useState<string>("Light");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +66,6 @@ export default function TemplateBuilderPage() {
 
   useEffect(() => {
     if (!templateId) return;
-    // fetch template by id
     fetch(`/api/templates/${templateId}`)
       .then((r) => {
         if (!r.ok) throw new Error("Failed to fetch template");
@@ -70,7 +73,6 @@ export default function TemplateBuilderPage() {
       })
       .then((t) => {
         setTemplate(t);
-        // normalize existing layout sections
         const existing: PlacedSection[] =
           (t?.layout?.sections || []).map((s: any) =>
             typeof s === "string"
@@ -82,14 +84,12 @@ export default function TemplateBuilderPage() {
                 }
           ) || [];
         setSections(existing);
+        setLayoutStyle(t?.layout?.style || "Modern");
+        setBackgroundStyle(t?.layout?.background || "Light");
       })
-      .catch((err) => {
-        console.error(err);
-        setError("Unable to load template");
-      });
+      .catch(() => setError("Unable to load template"));
   }, [templateId]);
 
-  // add a new section
   const handleAdd = (def: SectionDef) => {
     setSections((prev) => [
       ...prev,
@@ -97,17 +97,13 @@ export default function TemplateBuilderPage() {
     ]);
   };
 
-  // remove by uid
   const handleRemove = (uid: string) => {
     setSections((prev) => prev.filter((s) => s.uid !== uid));
   };
 
-  // reorder sections
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over) return;
-    if (active.id === over.id) return;
-
+    if (!over || active.id === over.id) return;
     setSections((prev) => {
       const oldIndex = prev.findIndex((s) => s.uid === active.id);
       const newIndex = prev.findIndex((s) => s.uid === over.id);
@@ -116,18 +112,18 @@ export default function TemplateBuilderPage() {
     });
   };
 
-  // Save layout
   const handleSave = async () => {
     if (!templateId || !template) return;
     setSaving(true);
     setError(null);
 
-    // ✅ Store layout in format linked to Resume model
     const layout = {
       sections: sections.map((s) => ({
-        id: s.id, // schema key like "education"
-        label: s.label, // UI label
+        id: s.id,
+        label: s.label,
       })),
+      style: layoutStyle,
+      background: backgroundStyle,
     };
 
     try {
@@ -138,16 +134,12 @@ export default function TemplateBuilderPage() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Save failed" }));
-        throw new Error(err?.error || "Save failed");
-      }
+      if (!res.ok) throw new Error("Save failed");
 
       const updated = await res.json();
       setTemplate(updated);
-      alert("Template layout saved!");
+      alert("Template saved successfully!");
     } catch (err: any) {
-      console.error(err);
       setError(err.message || "Save failed");
       alert("Save failed: " + (err.message || ""));
     } finally {
@@ -171,7 +163,7 @@ export default function TemplateBuilderPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.push("/admin/templates")}
-            className="px-3 py-2 bg-blue-400 rounded"
+            className="px-3 py-2 bg-blue-500 text-white rounded"
           >
             Back to list
           </button>
@@ -182,16 +174,16 @@ export default function TemplateBuilderPage() {
               saving ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"
             }`}
           >
-            {saving ? "Saving..." : "Save Layout"}
+            {saving ? "Saving..." : "Save Template"}
           </button>
         </div>
       </div>
 
       {error && <div className="mb-4 text-red-600">{error}</div>}
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Available Sections */}
-        <div className="border p-4 rounded">
+        <div className="border p-4 rounded col-span-1">
           <h2 className="font-semibold mb-3">Available Sections</h2>
           <div className="space-y-2">
             {AVAILABLE.map((s) => (
@@ -211,10 +203,9 @@ export default function TemplateBuilderPage() {
           </div>
         </div>
 
-        {/* Layout */}
-        <div className="border p-4 rounded">
+        {/* Layout Config */}
+        <div className="border p-4 rounded col-span-1">
           <h2 className="font-semibold mb-3">Layout (drag to reorder)</h2>
-
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -237,8 +228,62 @@ export default function TemplateBuilderPage() {
             </SortableContext>
           </DndContext>
 
-          <div className="mt-4 text-sm text-gray-600">
-            Tip: add sections and drag to reorder. Use ✕ to remove.
+          <div className="mt-4 text-sm text-gray-500">
+            Tip: Add and drag sections to reorder. Use ✕ to remove.
+          </div>
+        </div>
+
+        {/* Style Settings */}
+        <div className="border p-4 rounded col-span-1">
+          <h2 className="font-semibold mb-3">Template Style</h2>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Layout Style
+              </label>
+              <select
+                className="w-full border rounded p-2"
+                value={layoutStyle}
+                onChange={(e) => setLayoutStyle(e.target.value)}
+              >
+                {LAYOUT_STYLES.map((style) => (
+                  <option key={style}>{style}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Background Style
+              </label>
+              <select
+                className="w-full border rounded p-2"
+                value={backgroundStyle}
+                onChange={(e) => setBackgroundStyle(e.target.value)}
+              >
+                {BACKGROUND_STYLES.map((bg) => (
+                  <option key={bg}>{bg}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-4 p-3 border rounded bg-gray-50">
+              <h3 className="font-semibold text-sm mb-2">Live Preview</h3>
+              <div
+                className={`p-4 rounded h-40 flex items-center justify-center text-gray-700 ${
+                  backgroundStyle === "Dark"
+                    ? "bg-gray-800 text-white"
+                    : backgroundStyle === "Gradient"
+                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
+                    : backgroundStyle === "Pattern"
+                    ? "bg-[url('/pattern.svg')] bg-repeat"
+                    : "bg-white"
+                }`}
+              >
+                {layoutStyle} Layout Preview
+              </div>
+            </div>
           </div>
         </div>
       </div>
