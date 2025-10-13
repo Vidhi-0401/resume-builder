@@ -6,7 +6,7 @@ import { verifyUser } from "@/lib/authMiddleware";
 // 🟢 GET single resume
 export async function GET(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   try {
     const user = await verifyUser();
@@ -14,7 +14,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params; // ✅ await params
+    const { id } = context.params; // ✅ fixed (no await)
     await connectToDB();
 
     const resume = await Resume.findOne({ _id: id, userId: user.id });
@@ -32,7 +32,7 @@ export async function GET(
 // 🟢 PUT update resume
 export async function PUT(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   try {
     const user = await verifyUser();
@@ -40,7 +40,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params; // ✅ await params
+    const { id } = context.params; // ✅ fixed (no await)
     const body = await req.json();
 
     await connectToDB();
@@ -65,7 +65,7 @@ export async function PUT(
 // 🟢 DELETE resume
 export async function DELETE(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   try {
     const user = await verifyUser();
@@ -73,7 +73,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params; // ✅ await params
+    const { id } = context.params; // ✅ fixed (no await)
     await connectToDB();
 
     const deleted = await Resume.findOneAndDelete({ _id: id, userId: user.id });

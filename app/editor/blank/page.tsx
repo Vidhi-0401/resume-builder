@@ -4,7 +4,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 
-type ElemType = "text" | "rect" | "circle" | "line";
+type ElemType = "text" | "rect" | "circle" | "line" | "photo";
+// Top-level in BlankEditor component, along with other useState
+
 
 type Elem = {
   id: string;
@@ -18,6 +20,7 @@ type Elem = {
   fontFamily?: string;
   color?: string;
   background?: string;
+  borderRadius?: string;
 };
 
 type Page = {
@@ -26,12 +29,108 @@ type Page = {
 };
 
 const genId = (prefix = "") => `${prefix}${Math.random().toString(36).slice(2, 9)}`;
+// --- AI Panel component ---
+function AIPanel({
+  pages,
+  selectedText,
+  updateElement,
+}: {
+  pages: Page[];
+  selectedText: string;
+  updateElement: (update: (el: Elem) => Elem) => void;
+}) {
+  const [action, setAction] = useState("");
+  const [section, setSection] = useState("");
+  const [jobRole, setJobRole] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleAI = async () => {
+    if (!action) return alert("Select an action!");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/ai/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          section: section || "objective",
+          context: { pages, selectedText, jobRole },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.text) {
+        // Apply AI result to selected element if text-based
+        if (["generate_section", "proofread", "resume_summary"].includes(action)) {
+          updateElement((el) => ({ ...el, text: data.text }));
+        }
+        alert("✅ AI Done!");
+      } else {
+        alert("❌ AI returned empty result");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("❌ AI request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-3 bg-gray-800 rounded shadow mt-4 text-white">
+      <h4 className="font-bold mb-2">AI Assistant</h4>
+
+      <select
+        className="w-full mb-2 p-1 rounded text-black"
+        onChange={(e) => setAction(e.target.value)}
+        value={action}
+      >
+        <option value="">Select action</option>
+        <option value="generate_section">Generate Section</option>
+        <option value="suggest_skills">Suggest Skills</option>
+        <option value="proofread">Proofread Text</option>
+        <option value="layout_optimize">Optimize Layout</option>
+        <option value="resume_summary">Resume Summary</option>
+        <option value="job_match">Job Match</option>
+      </select>
+
+      {action === "generate_section" && (
+        <input
+          className="w-full mb-2 p-1 rounded text-black"
+          placeholder="Section (Objective / Experience / Education)"
+          value={section}
+          onChange={(e) => setSection(e.target.value)}
+        />
+      )}
+
+      {action === "job_match" && (
+        <input
+          className="w-full mb-2 p-1 rounded text-black"
+          placeholder="Job role / description"
+          value={jobRole}
+          onChange={(e) => setJobRole(e.target.value)}
+        />
+      )}
+
+      <button
+        onClick={handleAI}
+        disabled={loading}
+        className="w-full bg-blue-600 px-3 py-2 rounded"
+      >
+        {loading ? "Processing..." : "Run AI"}
+      </button>
+    </div>
+  );
+}
 
 export default function BlankEditor() {
   // canvas state
   const [pages, setPages] = useState<Page[]>([{ id: genId("page-"), elements: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>("");
   const [dragState, setDragState] = useState<{
     id: string;
     startX: number;
@@ -320,7 +419,62 @@ export default function BlankEditor() {
               <button onClick={() => addElement("line")} className="w-full px-3 py-2 border rounded text-white border-gray-600">
                 Add Line
               </button>
+              {/* Add Photo */}
+              <input
+                type="file"
+                accept="image/png, image/jpeg"
+                id="photo-upload"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const newEl: Elem = {
+                      id: genId("el-"),
+                      type: "photo",
+                      x: 60,
+                      y: 60,
+                      width: 150,
+                      height: 150,
+                      text: undefined,
+                      fontSize: undefined,
+                      fontFamily: undefined,
+                      color: undefined,
+                      background: reader.result as string, // store base64 image
+                    };
+                    setPages((prev) => {
+                      const copy = [...prev];
+                      copy[currentPageIndex] = {
+                        ...copy[currentPageIndex],
+                        elements: [...copy[currentPageIndex].elements, newEl],
+                      };
+                      return copy;
+                    });
+                    setSelectedId(newEl.id);
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = ""; // reset input
+                }}
+              />
+              <button
+                onClick={() => document.getElementById("photo-upload")?.click()}
+                className="w-full px-3 py-2 border rounded text-white border-gray-600"
+              >
+                Add Photo
+              </button>
+              {/* --- AI Panel --- */}
+              {/* <AIPanel
+                pages={pages}
+                selectedText={
+                  currentPage.elements.find((el) => el.id === selectedId)?.text || ""
+                }
+                updateElement={updateElement}
+              /> */}
+
             </div>
+
+
 
             {/* Selected element */}
             <div className="mt-6">
@@ -369,6 +523,21 @@ export default function BlankEditor() {
                     <button onClick={() => removeSelected()} className="px-3 py-1 bg-red-500 text-white rounded">
                       Delete
                     </button>
+
+                    {currentPage.elements.find(el => el.id === selectedId)?.type === "photo" && (
+                      <>
+                        <div className="mt-2 text-sm text-white">Shape</div>
+                        <select
+                          className="w-full border rounded px-2 py-1 bg-gray-700 text-white"
+                          onChange={(e) => updateElement((el) => ({ ...el, borderRadius: e.target.value }))}
+                          value={currentPage.elements.find(el => el.id === selectedId)?.borderRadius || "0"}
+                        >
+                          <option value="0">Square/Rectangle</option>
+                          <option value="50%">Circle</option>
+                        </select>
+                      </>
+                    )}
+
                   </div>
                 </>
               )}
@@ -390,29 +559,7 @@ export default function BlankEditor() {
               </div>
             </div>
 
-            {/* Saved resumes list (small viewport) */}
-            <div className="mt-6">
-              <h4 className="font-semibold mb-2 text-white">Saved Resumes</h4>
-              <div className="space-y-2 max-h-48 overflow-auto">
-                {resumes.length === 0 ? (
-                  <div className="text-gray-300 text-sm">No saved resumes</div>
-                ) : (
-                  resumes.map((r) => (
-                    <div key={r._id} className="flex justify-between items-center bg-gray-700 p-2 rounded">
-                      <div className="text-sm text-white truncate w-36">{r.name}</div>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleEdit(r._id)} className="px-2 py-1 bg-yellow-500 rounded text-white text-sm">
-                          Edit
-                        </button>
-                        <button onClick={() => handleDelete(r._id)} className="px-2 py-1 bg-red-600 rounded text-white text-sm">
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            {/* Left "Saved Resumes" removed per request */}
           </aside>
 
           {/* Canvas */}
@@ -457,42 +604,66 @@ export default function BlankEditor() {
                       };
 
                       if (el.type === "text") {
+                        const isEditing = editingId === el.id;
+
                         return (
-                          <div key={el.id} style={baseStyle} onMouseDown={(e) => onElementMouseDown(e, el)}>
-                            <div
-                              id={`txt-${el.id}`}
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => {
-                                const txt = e.currentTarget.textContent || "";
-                                setPages((prev) => {
-                                  const copy = [...prev];
-                                  copy[currentPageIndex] = {
-                                    ...copy[currentPageIndex],
-                                    elements: copy[currentPageIndex].elements.map((x) =>
-                                      x.id === el.id ? { ...x, text: txt } : x
-                                    ),
-                                  };
-                                  return copy;
-                                });
-                              }}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                fontSize: el.fontSize,
-                                fontFamily: el.fontFamily,
-                                color: el.color,
-                                background: el.background === "transparent" ? "transparent" : el.background,
-                                padding: 6,
-                                overflow: "hidden",
-                              }}
-                            >
-                              {el.text}
-                            </div>
+                          <div
+                            key={el.id}
+                            style={{
+                              ...baseStyle,
+                              fontSize: el.fontSize,
+                              fontFamily: el.fontFamily,
+                              color: el.color,
+                              background: el.background === "transparent" ? "transparent" : el.background,
+                              padding: 4,
+                              overflow: "hidden",
+                            }}
+                            onMouseDown={(e) => onElementMouseDown(e, el)}
+                          >
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingValue}
+                                onChange={(e) => setEditingValue(e.target.value)}
+                                onBlur={() => {
+                                  updateElement(() => ({ ...el, text: editingValue }));
+                                  setEditingId(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    updateElement(() => ({ ...el, text: editingValue }));
+                                    setEditingId(null);
+                                  }
+                                }}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  fontSize: el.fontSize,
+                                  fontFamily: el.fontFamily,
+                                  color: el.color,
+                                  background: el.background === "transparent" ? "transparent" : el.background,
+                                  padding: 4,
+                                  boxSizing: "border-box",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingId(el.id);
+                                  setEditingValue(el.text || "");
+                                }}
+                              >
+                                {el.text || "Double-click to edit"}
+                              </div>
+                            )}
+
                             {isSelected && <div style={resizeHandleStyle} onMouseDown={(e) => onResizeMouseDown(e, el)} />}
                           </div>
                         );
                       }
+
 
                       if (el.type === "rect" || el.type === "circle" || el.type === "line") {
                         return (
@@ -511,8 +682,25 @@ export default function BlankEditor() {
                         );
                       }
 
-                      return null;
+                      if (el.type === "photo") {
+                        return (
+                          <div
+                            key={el.id}
+                            style={{
+                              ...baseStyle,
+                              background: `url(${el.background}) center/cover no-repeat`,
+                              borderRadius: el.borderRadius || undefined,
+                            }}
+                            onMouseDown={(e) => onElementMouseDown(e, el)}
+                          >
+                            {isSelected && <div style={resizeHandleStyle} onMouseDown={(e) => onResizeMouseDown(e, el)} />}
+                          </div>
+                        );
+                      }
+
+                      return null; // fallback for any unknown type
                     })}
+
                   </div>
                 </div>
               </div>
@@ -524,16 +712,16 @@ export default function BlankEditor() {
                     Click an element to select. Double-click text to edit. Drag to move. Drag bottom-right corner to resize.
                   </div>
 
-                  {/* Larger Saved Resumes area when enough space */}
+                  {/* Right-side Saved Resumes (kept) - styled to match left sidebar dark theme */}
                   <div className="mt-4">
                     <h5 className="font-semibold">Saved Resumes</h5>
                     <div className="mt-2 max-h-56 overflow-auto space-y-2">
                       {resumes.length === 0 ? (
-                        <div className="text-sm text-gray-500">No saved resumes</div>
+                        <div className="text-sm text-gray-300">No saved resumes</div>
                       ) : (
                         resumes.map((r) => (
-                          <div key={r._id} className="flex justify-between items-center bg-gray-100 p-2 rounded">
-                            <div className="text-sm truncate w-40">{r.name}</div>
+                          <div key={r._id} className="flex justify-between items-center bg-gray-700 p-2 rounded">
+                            <div className="text-sm text-white truncate w-40">{r.name}</div>
                             <div className="flex gap-1">
                               <button onClick={() => handleEdit(r._id)} className="px-2 py-1 bg-yellow-500 rounded text-white text-sm">
                                 Edit
@@ -652,6 +840,24 @@ export default function BlankEditor() {
                     />
                   );
                 }
+
+                if (el.type === "photo") {
+                  return (
+                    <div
+                      key={el.id}
+                      style={{
+                        position: "absolute",
+                        left: el.x,
+                        top: el.y,
+                        width: el.width,
+                        height: el.height,
+                        background: `url(${el.background}) center/cover no-repeat`,
+                        borderRadius: el.borderRadius || undefined,
+                      }}
+                    />
+                  );
+                }
+
                 return null;
               })}
             </div>

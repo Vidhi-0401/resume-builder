@@ -1,4 +1,5 @@
 "use client";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ResumeProvider } from "@/context/Resumecontext";
@@ -6,6 +7,7 @@ import Template1 from "@/app/templates/template1";
 import Template2 from "@/app/templates/template2";
 import Template3 from "@/app/templates/template3";
 import TemplateRenderer from "@/components/TemplateRenderer";
+import AIModal from "@/components/AIModal"; // 👈 Import AI modal component
 
 // Hardcoded manual templates
 const manualTemplates = [
@@ -41,6 +43,7 @@ const manualTemplates = [
 export default function TemplatesPage() {
   const router = useRouter();
   const [adminTemplates, setAdminTemplates] = useState<any[]>([]);
+  const [showAIModal, setShowAIModal] = useState(false); // 👈 AI modal state
 
   // Load admin-created templates from DB
   useEffect(() => {
@@ -50,16 +53,15 @@ export default function TemplatesPage() {
       .catch((err) => console.error("Error fetching templates:", err));
   }, []);
 
-  
-
   return (
     <div className="min-h-screen bg-gray-100 p-10">
       <h1 className="text-3xl font-bold text-center mb-6 text-gray-900">
         Choose a Resume Template
       </h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* --- Create Your Own card (first position) --- */}
+      {/* --- Section: Create or AI Generate --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-center mb-8">
+        {/* --- Create Your Own card --- */}
         <div
           role="button"
           onClick={() => router.push("/editor/blank")}
@@ -68,10 +70,27 @@ export default function TemplatesPage() {
         >
           <div className="text-6xl text-indigo-600 font-bold">+</div>
           <div className="mt-4 text-xl font-semibold">Create Your Own Resume</div>
-          <div className="text-sm text-gray-500 mt-1">Start from blank — drag, drop & design</div>
+          <div className="text-sm text-gray-500 mt-1">
+            Start from blank — drag, drop & design
+          </div>
+        </div>
+
+        {/* --- ✨ Generate with AI card --- */}
+        <div
+          role="button"
+          onClick={() => setShowAIModal(true)}
+          className="cursor-pointer rounded-lg border border-dashed border-gray-300 bg-white p-6 flex flex-col items-center justify-center hover:shadow-lg transition"
+          style={{ minHeight: 300 }}
+        >
+          <div className="text-6xl text-purple-600 font-bold">✨</div>
+          <div className="mt-4 text-xl font-semibold">Generate with AI</div>
+          <div className="text-sm text-gray-500 mt-1">
+            Let AI create a starter resume for you
+          </div>
         </div>
       </div>
 
+      {/* --- Section: Templates Grid --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Render manual templates */}
         {manualTemplates.map((t) => (
@@ -111,6 +130,9 @@ export default function TemplatesPage() {
           </div>
         ))}
       </div>
+
+      {/* --- AI Modal Popup --- */}
+      {showAIModal && <AIModal onClose={() => setShowAIModal(false)} />}
     </div>
   );
 }
