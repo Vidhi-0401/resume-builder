@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -17,16 +16,8 @@ import {
 } from "@dnd-kit/sortable";
 import SortableItem from "@/components/dnd/SortableItem";
 
-type SectionDef = {
-  id: string;
-  label: string;
-};
-
-type PlacedSection = {
-  uid: string;
-  id: string;
-  label: string;
-};
+type SectionDef = { id: string; label: string };
+type PlacedSection = { uid: string; id: string; label: string };
 
 const AVAILABLE: SectionDef[] = [
   { id: "profile", label: "Profile" },
@@ -40,9 +31,6 @@ const AVAILABLE: SectionDef[] = [
   { id: "contact", label: "Contact Info" },
   { id: "links", label: "Links (LinkedIn/GitHub)" },
 ];
-
-const LAYOUT_STYLES = ["Modern", "Classic", "Minimal", "Creative"];
-const BACKGROUND_STYLES = ["Light", "Dark", "Gradient", "Pattern"];
 
 function makeUid(base: string) {
   return `${base}-${Date.now().toString(36)}-${Math.random()
@@ -73,6 +61,7 @@ export default function TemplateBuilderPage() {
       })
       .then((t) => {
         setTemplate(t);
+
         const existing: PlacedSection[] =
           (t?.layout?.sections || []).map((s: any) =>
             typeof s === "string"
@@ -84,8 +73,17 @@ export default function TemplateBuilderPage() {
                 }
           ) || [];
         setSections(existing);
-        setLayoutStyle(t?.layout?.style || "Modern");
-        setBackgroundStyle(t?.layout?.background || "Light");
+
+        // 🔧 Normalize style/background to strings to avoid rendering objects
+        const styleRaw = t?.layout?.style;
+        setLayoutStyle(
+          typeof styleRaw === "string"
+            ? styleRaw
+            : styleRaw?.layoutType ?? "Modern"
+        );
+
+        const bgRaw = t?.layout?.background;
+        setBackgroundStyle(typeof bgRaw === "string" ? bgRaw : "Light");
       })
       .catch(() => setError("Unable to load template"));
   }, [templateId]);
@@ -118,12 +116,9 @@ export default function TemplateBuilderPage() {
     setError(null);
 
     const layout = {
-      sections: sections.map((s) => ({
-        id: s.id,
-        label: s.label,
-      })),
-      style: layoutStyle,
-      background: backgroundStyle,
+      sections: sections.map((s) => ({ id: s.id, label: s.label })),
+      style: layoutStyle, // always a string now
+      background: backgroundStyle, // always a string now
     };
 
     try {
@@ -181,16 +176,14 @@ export default function TemplateBuilderPage() {
 
       {error && <div className="mb-4 text-red-600">{error}</div>}
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      {/* ⬇️ Change to 2 columns and remove the 3rd panel */}
+      <div className="grid lg:grid-cols-2 gap-6">
         {/* Available Sections */}
         <div className="border p-4 rounded col-span-1">
           <h2 className="font-semibold mb-3">Available Sections</h2>
           <div className="space-y-2">
             {AVAILABLE.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between gap-2"
-              >
+              <div key={s.id} className="flex items-center justify-between gap-2">
                 <div className="py-2">{s.label}</div>
                 <button
                   onClick={() => handleAdd(s)}
@@ -233,59 +226,7 @@ export default function TemplateBuilderPage() {
           </div>
         </div>
 
-        {/* Style Settings */}
-        <div className="border p-4 rounded col-span-1">
-          <h2 className="font-semibold mb-3">Template Style</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Layout Style
-              </label>
-              <select
-                className="w-full border rounded p-2"
-                value={layoutStyle}
-                onChange={(e) => setLayoutStyle(e.target.value)}
-              >
-                {LAYOUT_STYLES.map((style) => (
-                  <option key={style}>{style}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Background Style
-              </label>
-              <select
-                className="w-full border rounded p-2"
-                value={backgroundStyle}
-                onChange={(e) => setBackgroundStyle(e.target.value)}
-              >
-                {BACKGROUND_STYLES.map((bg) => (
-                  <option key={bg}>{bg}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mt-4 p-3 border rounded bg-gray-50">
-              <h3 className="font-semibold text-sm mb-2">Live Preview</h3>
-              <div
-                className={`p-4 rounded h-40 flex items-center justify-center text-gray-700 ${
-                  backgroundStyle === "Dark"
-                    ? "bg-gray-800 text-white"
-                    : backgroundStyle === "Gradient"
-                    ? "bg-gradient-to-r from-indigo-500 to-blue-500 text-white"
-                    : backgroundStyle === "Pattern"
-                    ? "bg-[url('/pattern.svg')] bg-repeat"
-                    : "bg-white"
-                }`}
-              >
-                {layoutStyle} Layout Preview
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Removed the "Template Style" (third) column */}
       </div>
     </div>
   );
