@@ -69,7 +69,8 @@ export default function TemplatesPage() {
   const filteredAdminTemplates = adminTemplates.filter((t) => {
     const matchesSearch = t.name.toLowerCase().includes(query.toLowerCase());
     const matchesFilter =
-      filter === "All" || t.layout?.style?.toLowerCase() === filter.toLowerCase();
+      filter === "All" ||
+      t.layout?.style?.layoutType?.toLowerCase() === filter.toLowerCase();
     return matchesSearch && matchesFilter;
   });
 
@@ -183,8 +184,9 @@ export default function TemplatesPage() {
               </div>
               <div className="p-4 border-t">
                 <h2 className="text-lg font-semibold text-gray-900">{t.name}</h2>
+                {/* ✅ FIXED LINE */}
                 <p className="text-sm text-gray-600">
-                  {t.layout?.style || "Custom"} · Admin Template
+                  {t.layout?.style?.layoutType || "Custom"} · Admin Template
                 </p>
               </div>
             </div>
@@ -245,3 +247,4 @@ export default function TemplatesPage() {
     </div>
   );
 }
+ 

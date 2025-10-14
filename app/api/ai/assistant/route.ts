@@ -2,31 +2,49 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!, // set this in .env.local
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export async function POST(req: Request) {
   try {
-    const { section, context } = await req.json();
-    const prompt =
-      context?.selectedText ||
-      `Create a professional resume summary for ${section || "a job role"}`;
+    const { action, section, context, userId } = await req.json();
 
-    const aiResponse = await openai.chat.completions.create({
+    let prompt = "";
+    switch (action) {
+      case "generate_section":
+        prompt = `Write a polished resume section for "${section}" based on this resume context:\n${JSON.stringify(context.pages, null, 2)}`;
+        break;
+      case "suggest_skills":
+        prompt = `Suggest 10 relevant technical and soft skills based on this resume:\n${JSON.stringify(context.pages, null, 2)}`;
+        break;
+      case "proofread":
+        prompt = `Proofread and rewrite this professionally (resume style):\n${context.selectedText}`;
+        break;
+      case "layout_optimize":
+        prompt = `Suggest layout improvements for this resume content:\n${JSON.stringify(context.pages, null, 2)}`;
+        break;
+      case "resume_summary":
+        prompt = `Write a concise 3-sentence professional summary for this resume:\n${JSON.stringify(context.pages, null, 2)}`;
+        break;
+      case "job_match":
+        prompt = `Compare this resume with the job role "${context.jobRole}" and list missing skills or areas to improve:\n${JSON.stringify(context.pages, null, 2)}`;
+        break;
+      default:
+        return NextResponse.json({ text: "❌ Invalid action" }, { status: 400 });
+    }
+
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: "You are an expert resume writer. Respond in short, clean text only.",
-        },
+        { role: "system", content: "You are a professional resume writing assistant." },
         { role: "user", content: prompt },
       ],
     });
 
-    const text = aiResponse.choices[0]?.message?.content?.trim() || "No output";
+    const text = completion.choices?.[0]?.message?.content?.trim() || "No AI response found.";
     return NextResponse.json({ text });
-  } catch (err) {
-    console.error("AI error:", err);
-    return NextResponse.json({ text: "AI generation failed." }, { status: 500 });
+  } catch (error) {
+    console.error("AI error:", error);
+    return NextResponse.json({ error: "Failed to process AI request" }, { status: 500 });
   }
 }
