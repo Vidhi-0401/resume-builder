@@ -1,12 +1,10 @@
-// app/blank/page.tsx (or wherever your blank editor lives)
+// app/blank/page.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 
 type ElemType = "text" | "rect" | "circle" | "line" | "photo";
-// Top-level in BlankEditor component, along with other useState
-
 
 type Elem = {
   id: string;
@@ -28,13 +26,21 @@ type Page = {
   elements: Elem[];
 };
 
-const genId = (prefix = "") => `${prefix}${Math.random().toString(36).slice(2, 9)}`;
-// --- AI Panel component ---
-function AIPanel({
+const genId = (prefix = "") =>
+  `${prefix}${Math.random().toString(36).slice(2, 9)}`;
+
+/* ------------------------------
+   Slide-in AI Assistant Panel
+--------------------------------*/
+function AIPanelSlideOver({
+  open,
+  onClose,
   pages,
   selectedText,
   updateElement,
 }: {
+  open: boolean;
+  onClose: () => void;
   pages: Page[];
   selectedText: string;
   updateElement: (update: (el: Elem) => Elem) => void;
@@ -43,10 +49,32 @@ function AIPanel({
   const [section, setSection] = useState("");
   const [jobRole, setJobRole] = useState("");
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState("");
+
+  // Close on ESC
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  // Prevent body scroll while open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [open]);
 
   const handleAI = async () => {
     if (!action) return alert("Select an action!");
     setLoading(true);
+    setResult("");
 
     try {
       const res = await fetch("/api/ai/assistant", {
@@ -60,77 +88,176 @@ function AIPanel({
       });
 
       const data = await res.json();
-      if (data.text) {
-        // Apply AI result to selected element if text-based
-        if (["generate_section", "proofread", "resume_summary"].includes(action)) {
-          updateElement((el) => ({ ...el, text: data.text }));
-        }
-        alert("✅ AI Done!");
+      if (data?.text) {
+        setResult(data.text);
       } else {
-        alert("❌ AI returned empty result");
+        setResult("No content returned.");
       }
     } catch (err) {
       console.error(err);
-      alert("❌ AI request failed");
+      setResult("AI request failed.");
     } finally {
       setLoading(false);
     }
   };
 
+  const applyToSelected = () => {
+    if (!result) return;
+    updateElement((el) => ({ ...el, text: result }));
+  };
+
   return (
-    <div className="p-3 bg-gray-800 rounded shadow mt-4 text-white">
-      <h4 className="font-bold mb-2">AI Assistant</h4>
-
-      <select
-        className="w-full mb-2 p-1 rounded text-black"
-        onChange={(e) => setAction(e.target.value)}
-        value={action}
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-40 transition-opacity ${
+          open ? "bg-black/40 opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* Panel */}
+      <aside
+        className={`fixed top-0 left-0 z-50 h-full w-full max-w-md transform bg-gray-900 text-white shadow-2xl transition-transform duration-300 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI Assistant"
       >
-        <option value="">Select action</option>
-        <option value="generate_section">Generate Section</option>
-        <option value="suggest_skills">Suggest Skills</option>
-        <option value="proofread">Proofread Text</option>
-        <option value="layout_optimize">Optimize Layout</option>
-        <option value="resume_summary">Resume Summary</option>
-        <option value="job_match">Job Match</option>
-      </select>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-800 ring-1 ring-gray-700">
+              ✨
+            </span>
+            <h3 className="text-lg font-semibold">AI Assistant</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-gray-300 hover:bg-gray-800 hover:text-white"
+            aria-label="Close AI Assistant"
+          >
+            ✕
+          </button>
+        </div>
 
-      {action === "generate_section" && (
-        <input
-          className="w-full mb-2 p-1 rounded text-black"
-          placeholder="Section (Objective / Experience / Education)"
-          value={section}
-          onChange={(e) => setSection(e.target.value)}
-        />
-      )}
+        <div className="space-y-4 px-4 py-4">
+          <div>
+            <label className="mb-1 block text-sm text-gray-300">
+              Action
+            </label>
+            <select
+              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none"
+              value={action}
+              onChange={(e) => setAction(e.target.value)}
+            >
+              <option value="">Select action</option>
+              <option value="generate_section">Generate Section</option>
+              <option value="suggest_skills">Suggest Skills</option>
+              <option value="proofread">Proofread Text</option>
+              <option value="layout_optimize">Optimize Layout</option>
+              <option value="resume_summary">Resume Summary</option>
+              <option value="job_match">Job Match</option>
+            </select>
+          </div>
 
-      {action === "job_match" && (
-        <input
-          className="w-full mb-2 p-1 rounded text-black"
-          placeholder="Job role / description"
-          value={jobRole}
-          onChange={(e) => setJobRole(e.target.value)}
-        />
-      )}
+          {action === "generate_section" && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                Section (e.g., Objective / Experience / Education)
+              </label>
+              <input
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none"
+                placeholder="Objective"
+              />
+            </div>
+          )}
 
-      <button
-        onClick={handleAI}
-        disabled={loading}
-        className="w-full bg-blue-600 px-3 py-2 rounded"
-      >
-        {loading ? "Processing..." : "Run AI"}
-      </button>
-    </div>
+          {action === "job_match" && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-300">
+                Job role / description
+              </label>
+              <input
+                value={jobRole}
+                onChange={(e) => setJobRole(e.target.value)}
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none"
+                placeholder="Frontend Engineer at X (React, Next.js)"
+              />
+            </div>
+          )}
+
+          <div className="rounded-md bg-gray-800/60 p-3 text-xs text-gray-300">
+            <div className="mb-1 font-semibold text-gray-200">
+              Selected Text Context
+            </div>
+            <div className="line-clamp-3 whitespace-pre-wrap">
+              {selectedText || "— (no text element selected) —"}
+            </div>
+          </div>
+
+          <button
+            onClick={handleAI}
+            disabled={loading}
+            className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {loading ? "Processing..." : "Run AI"}
+          </button>
+
+          <div>
+            <label className="mb-1 block text-sm text-gray-300">
+              AI Result
+            </label>
+            <textarea
+              className="h-40 w-full resize-none rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white outline-none"
+              value={result}
+              onChange={(e) => setResult(e.target.value)}
+              placeholder="AI output will appear here..."
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(result || "");
+                }}
+                className="rounded-md px-3 py-1 text-sm text-gray-300 ring-1 ring-gray-700 hover:bg-gray-800"
+              >
+                Copy
+              </button>
+              <button
+                onClick={applyToSelected}
+                disabled={!result}
+                className="rounded-md bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              >
+                Apply to selected element
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-1 text-xs text-gray-500">
+            Tip: select a text element on the canvas to overwrite it with the AI
+            result.
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
+/* ------------------------------
+          Main Editor
+--------------------------------*/
 export default function BlankEditor() {
   // canvas state
-  const [pages, setPages] = useState<Page[]>([{ id: genId("page-"), elements: [] }]);
+  const [pages, setPages] = useState<Page[]>([
+    { id: genId("page-"), elements: [] },
+  ]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
+
   const [dragState, setDragState] = useState<{
     id: string;
     startX: number;
@@ -142,7 +269,7 @@ export default function BlankEditor() {
     resizing?: boolean;
   } | null>(null);
 
-  // saving / resumes list state
+  // saved / API integration (kept, but you can hide lists elsewhere)
   const [resumes, setResumes] = useState<any[]>([]);
   const [editingResumeId, setEditingResumeId] = useState<string | null>(null);
   const [resumeName, setResumeName] = useState<string>("");
@@ -155,7 +282,10 @@ export default function BlankEditor() {
     documentTitle: "My_Custom_Resume",
   });
 
-  // --- canvas helpers (unchanged) ---
+  // AI slide-over visibility
+  const [showAI, setShowAI] = useState(false);
+
+  // drag/resize handlers
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragState) return;
@@ -185,9 +315,7 @@ export default function BlankEditor() {
         return copy;
       });
     };
-    const onUp = () => {
-      setDragState(null);
-    };
+    const onUp = () => setDragState(null);
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
@@ -240,7 +368,9 @@ export default function BlankEditor() {
       const copy = [...prev];
       copy[currentPageIndex] = {
         ...copy[currentPageIndex],
-        elements: copy[currentPageIndex].elements.filter((e) => e.id !== selectedId),
+        elements: copy[currentPageIndex].elements.filter(
+          (e) => e.id !== selectedId
+        ),
       };
       return copy;
     });
@@ -285,7 +415,7 @@ export default function BlankEditor() {
 
   const currentPage = pages[currentPageIndex];
 
-  // --- fetch saved resumes on mount ---
+  // saved list fetch (logic kept; UI list can be hidden elsewhere if desired)
   useEffect(() => {
     fetch("/api/resume")
       .then((r) => r.json())
@@ -298,7 +428,6 @@ export default function BlankEditor() {
       });
   }, []);
 
-  // --- save (POST or PUT) ---
   const handleSave = async () => {
     setLoadingSave(true);
     try {
@@ -309,7 +438,9 @@ export default function BlankEditor() {
       };
 
       const method = editingResumeId ? "PUT" : "POST";
-      const url = editingResumeId ? `/api/resume/${editingResumeId}` : "/api/resume";
+      const url = editingResumeId
+        ? `/api/resume/${editingResumeId}`
+        : "/api/resume";
 
       const res = await fetch(url, {
         method,
@@ -321,7 +452,6 @@ export default function BlankEditor() {
 
       const saved = await res.json();
 
-      // Update local list
       if (editingResumeId) {
         setResumes((prev) => prev.map((r) => (r._id === saved._id ? saved : r)));
       } else {
@@ -338,14 +468,16 @@ export default function BlankEditor() {
     }
   };
 
-  // --- load a resume into the canvas for editing ---
   const handleEdit = async (id: string) => {
     try {
       const res = await fetch(`/api/resume/${id}`);
       if (!res.ok) throw new Error("Failed to load resume");
       const saved = await res.json();
-      // set pages from saved resume, fall back to empty page if missing
-      setPages(saved.pages && saved.pages.length ? saved.pages : [{ id: genId("page-"), elements: [] }]);
+      setPages(
+        saved.pages && saved.pages.length
+          ? saved.pages
+          : [{ id: genId("page-"), elements: [] }]
+      );
       setCurrentPageIndex(0);
       setResumeName(saved.name || "");
       setEditingResumeId(saved._id);
@@ -356,14 +488,12 @@ export default function BlankEditor() {
     }
   };
 
-  // --- delete a resume ---
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this saved resume?")) return;
     try {
       const res = await fetch(`/api/resume/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
       setResumes((prev) => prev.filter((r) => r._id !== id));
-      // if currently editing that resume - reset editor
       if (editingResumeId === id) {
         setEditingResumeId(null);
         setResumeName("");
@@ -381,44 +511,80 @@ export default function BlankEditor() {
     <div className="min-h-screen bg-gray-900 p-6">
       <div className="max-w-full mx-auto">
         {/* header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-white">Create Your Own Resume — Blank Canvas</h2>
-          <div className="space-x-2 flex items-center">
+        <div className="relative mb-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white">
+            Create Your Own Resume — Blank Canvas
+          </h2>
+
+          <div className="space-x-2">
             <input
               placeholder="Resume name"
               value={resumeName}
               onChange={(e) => setResumeName(e.target.value)}
-              className="px-3 py-2 rounded border mr-2"
+              className="mr-2 rounded border px-3 py-2"
             />
-            <button onClick={addPage} className="px-3 py-2 bg-green-600 text-white rounded-md shadow">
+            <button
+              onClick={addPage}
+              className="rounded-md bg-green-600 px-3 py-2 text-white shadow"
+            >
               ➕ Add Page
             </button>
-            <button onClick={handleSave} className="px-3 py-2 bg-emerald-600 text-white rounded-md shadow" disabled={loadingSave}>
+            <button
+              onClick={handleSave}
+              className="rounded-md bg-emerald-600 px-3 py-2 text-white shadow disabled:opacity-50"
+              disabled={loadingSave}
+            >
               {loadingSave ? "Saving..." : editingResumeId ? "Update Save" : "Save Resume"}
             </button>
-            <button onClick={handlePrint} className="px-3 py-2 bg-blue-600 text-white rounded-md shadow">
+            <button
+              onClick={handlePrint}
+              className="rounded-md bg-blue-600 px-3 py-2 text-white shadow"
+            >
               Download PDF
             </button>
           </div>
+
+          {/* Floating AI Button (left edge, mid-screen) */}
+          <button
+            onClick={() => setShowAI(true)}
+            title="Open AI Assistant"
+            className="fixed left-3 top-1/2 z-50 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-xl ring-2 ring-gray-700 transition-transform hover:scale-110 hover:ring-indigo-500"
+            aria-label="Open AI Assistant"
+          >
+            ✨
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
           {/* Tools */}
-          <aside className="md:col-span-1 bg-gray-800 p-4 rounded shadow">
-            <h3 className="font-semibold mb-2 text-white">Tools</h3>
+          <aside className="rounded bg-gray-800 p-4 shadow md:col-span-1">
+            <h3 className="mb-2 font-semibold text-white">Tools</h3>
             <div className="space-y-2">
-              <button onClick={() => addElement("text")} className="w-full px-3 py-2 border rounded text-white border-gray-600">
+              <button
+                onClick={() => addElement("text")}
+                className="w-full rounded border border-gray-600 px-3 py-2 text-white"
+              >
                 Add Text
               </button>
-              <button onClick={() => addElement("rect")} className="w-full px-3 py-2 border rounded text-white border-gray-600">
+              <button
+                onClick={() => addElement("rect")}
+                className="w-full rounded border border-gray-600 px-3 py-2 text-white"
+              >
                 Add Rectangle
               </button>
-              <button onClick={() => addElement("circle")} className="w-full px-3 py-2 border rounded text-white border-gray-600">
+              <button
+                onClick={() => addElement("circle")}
+                className="w-full rounded border border-gray-600 px-3 py-2 text-white"
+              >
                 Add Circle
               </button>
-              <button onClick={() => addElement("line")} className="w-full px-3 py-2 border rounded text-white border-gray-600">
+              <button
+                onClick={() => addElement("line")}
+                className="w-full rounded border border-gray-600 px-3 py-2 text-white"
+              >
                 Add Line
               </button>
+
               {/* Add Photo */}
               <input
                 type="file"
@@ -437,11 +603,7 @@ export default function BlankEditor() {
                       y: 60,
                       width: 150,
                       height: 150,
-                      text: undefined,
-                      fontSize: undefined,
-                      fontFamily: undefined,
-                      color: undefined,
-                      background: reader.result as string, // store base64 image
+                      background: reader.result as string,
                     };
                     setPages((prev) => {
                       const copy = [...prev];
@@ -454,90 +616,121 @@ export default function BlankEditor() {
                     setSelectedId(newEl.id);
                   };
                   reader.readAsDataURL(file);
-                  e.target.value = ""; // reset input
+                  e.target.value = "";
                 }}
               />
               <button
                 onClick={() => document.getElementById("photo-upload")?.click()}
-                className="w-full px-3 py-2 border rounded text-white border-gray-600"
+                className="w-full rounded border border-gray-600 px-3 py-2 text-white"
               >
                 Add Photo
               </button>
-              {/* --- AI Panel --- */}
-              {/* <AIPanel
-                pages={pages}
-                selectedText={
-                  currentPage.elements.find((el) => el.id === selectedId)?.text || ""
-                }
-                updateElement={updateElement}
-              /> */}
-
             </div>
-
-
 
             {/* Selected element */}
             <div className="mt-6">
               <h4 className="font-semibold text-white">Selected</h4>
               {!selectedId ? (
-                <div className="text-sm text-gray-300 mt-2">No element selected</div>
+                <div className="mt-2 text-sm text-gray-300">
+                  No element selected
+                </div>
               ) : (
                 <>
                   <div className="mt-2 text-sm text-white">Font family</div>
                   <select
-                    className="w-full border rounded px-2 py-1 bg-gray-700 text-white"
-                    onChange={(e) => updateElement((el) => ({ ...el, fontFamily: e.target.value }))}
-                    value={currentPage.elements.find((el) => el.id === selectedId)?.fontFamily || "Arial, sans-serif"}
+                    className="w-full rounded border border-gray-700 bg-gray-700 px-2 py-1 text-white"
+                    onChange={(e) =>
+                      updateElement((el) => ({ ...el, fontFamily: e.target.value }))
+                    }
+                    value={
+                      currentPage.elements.find((el) => el.id === selectedId)
+                        ?.fontFamily || "Arial, sans-serif"
+                    }
                   >
                     <option value="Arial, sans-serif">Arial</option>
                     <option value="'Noto Sans', sans-serif">Noto Sans</option>
-                    <option value="'Times New Roman', serif">Times New Roman</option>
+                    <option value="'Times New Roman', serif">
+                      Times New Roman
+                    </option>
                     <option value="'Georgia', serif">Georgia</option>
                   </select>
 
                   <div className="mt-2 text-sm text-white">Font size</div>
                   <input
                     type="number"
-                    className="w-full border rounded px-2 py-1 bg-gray-700 text-white"
-                    onChange={(e) => updateElement((el) => ({ ...el, fontSize: Number(e.target.value) || 12 }))}
-                    value={currentPage.elements.find((el) => el.id === selectedId)?.fontSize || 16}
+                    className="w-full rounded border border-gray-700 bg-gray-700 px-2 py-1 text-white"
+                    onChange={(e) =>
+                      updateElement((el) => ({
+                        ...el,
+                        fontSize: Number(e.target.value) || 12,
+                      }))
+                    }
+                    value={
+                      currentPage.elements.find((el) => el.id === selectedId)
+                        ?.fontSize || 16
+                    }
                   />
 
                   <div className="mt-2 text-sm text-white">Text color</div>
                   <input
                     type="color"
-                    className="w-full h-8 p-0"
-                    onChange={(e) => updateElement((el) => ({ ...el, color: e.target.value }))}
-                    value={currentPage.elements.find((el) => el.id === selectedId)?.color || "#111827"}
+                    className="h-8 w-full p-0"
+                    onChange={(e) =>
+                      updateElement((el) => ({ ...el, color: e.target.value }))
+                    }
+                    value={
+                      currentPage.elements.find((el) => el.id === selectedId)
+                        ?.color || "#111827"
+                    }
                   />
 
                   <div className="mt-2 text-sm text-white">Background</div>
                   <input
                     type="color"
-                    className="w-full h-8 p-0"
-                    onChange={(e) => updateElement((el) => ({ ...el, background: e.target.value }))}
-                    value={currentPage.elements.find((el) => el.id === selectedId)?.background || "#00000000"}
+                    className="h-8 w-full p-0"
+                    onChange={(e) =>
+                      updateElement((el) => ({
+                        ...el,
+                        background: e.target.value,
+                      }))
+                    }
+                    value={
+                      currentPage.elements.find((el) => el.id === selectedId)
+                        ?.background || "#00000000"
+                    }
                   />
 
-                  <div className="flex gap-2 mt-3">
-                    <button onClick={() => removeSelected()} className="px-3 py-1 bg-red-500 text-white rounded">
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => removeSelected()}
+                      className="rounded bg-red-500 px-3 py-1 text-white"
+                    >
                       Delete
                     </button>
 
-                    {currentPage.elements.find(el => el.id === selectedId)?.type === "photo" && (
+                    {currentPage.elements.find((el) => el.id === selectedId)
+                      ?.type === "photo" && (
                       <>
                         <div className="mt-2 text-sm text-white">Shape</div>
                         <select
-                          className="w-full border rounded px-2 py-1 bg-gray-700 text-white"
-                          onChange={(e) => updateElement((el) => ({ ...el, borderRadius: e.target.value }))}
-                          value={currentPage.elements.find(el => el.id === selectedId)?.borderRadius || "0"}
+                          className="w-full rounded border border-gray-700 bg-gray-700 px-2 py-1 text-white"
+                          onChange={(e) =>
+                            updateElement((el) => ({
+                              ...el,
+                              borderRadius: e.target.value,
+                            }))
+                          }
+                          value={
+                            currentPage.elements.find(
+                              (el) => el.id === selectedId
+                            )?.borderRadius || "0"
+                          }
                         >
                           <option value="0">Square/Rectangle</option>
                           <option value="50%">Circle</option>
                         </select>
                       </>
                     )}
-
                   </div>
                 </>
               )}
@@ -545,32 +738,36 @@ export default function BlankEditor() {
 
             {/* page buttons */}
             <div className="mt-6">
-              <h4 className="font-semibold mb-2 text-white">Pages</h4>
+              <h4 className="mb-2 font-semibold text-white">Pages</h4>
               <div className="flex gap-2">
                 {pages.map((p, i) => (
                   <button
                     key={p.id}
                     onClick={() => goToPage(i)}
-                    className={`px-3 py-1 rounded border ${i === currentPageIndex ? "bg-indigo-600 text-white" : ""}`}
+                    className={`rounded border px-3 py-1 ${
+                      i === currentPageIndex
+                        ? "bg-indigo-600 text-white"
+                        : "text-white"
+                    }`}
                   >
                     {i + 1}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Left "Saved Resumes" removed per request */}
           </aside>
 
           {/* Canvas */}
           <main className="md:col-span-3 flex flex-col gap-4">
             <div className="flex gap-4">
               <div className="flex-1">
-                <div className="bg-white p-3 rounded shadow">
-                  <div className="mb-2 text-sm text-gray-500">Canvas (drag items to reposition / resize)</div>
+                <div className="rounded bg-white p-3 shadow">
+                  <div className="mb-2 text-sm text-gray-500">
+                    Canvas (drag items to reposition / resize)
+                  </div>
 
                   <div
-                    className="mx-auto bg-white border"
+                    className="mx-auto border bg-white"
                     style={{
                       width: 794,
                       height: 1123,
@@ -614,7 +811,10 @@ export default function BlankEditor() {
                               fontSize: el.fontSize,
                               fontFamily: el.fontFamily,
                               color: el.color,
-                              background: el.background === "transparent" ? "transparent" : el.background,
+                              background:
+                                el.background === "transparent"
+                                  ? "transparent"
+                                  : el.background,
                               padding: 4,
                               overflow: "hidden",
                             }}
@@ -627,12 +827,18 @@ export default function BlankEditor() {
                                 value={editingValue}
                                 onChange={(e) => setEditingValue(e.target.value)}
                                 onBlur={() => {
-                                  updateElement(() => ({ ...el, text: editingValue }));
+                                  updateElement(() => ({
+                                    ...el,
+                                    text: editingValue,
+                                  }));
                                   setEditingId(null);
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
-                                    updateElement(() => ({ ...el, text: editingValue }));
+                                    updateElement(() => ({
+                                      ...el,
+                                      text: editingValue,
+                                    }));
                                     setEditingId(null);
                                   }
                                 }}
@@ -642,7 +848,10 @@ export default function BlankEditor() {
                                   fontSize: el.fontSize,
                                   fontFamily: el.fontFamily,
                                   color: el.color,
-                                  background: el.background === "transparent" ? "transparent" : el.background,
+                                  background:
+                                    el.background === "transparent"
+                                      ? "transparent"
+                                      : el.background,
                                   padding: 4,
                                   boxSizing: "border-box",
                                 }}
@@ -659,13 +868,21 @@ export default function BlankEditor() {
                               </div>
                             )}
 
-                            {isSelected && <div style={resizeHandleStyle} onMouseDown={(e) => onResizeMouseDown(e, el)} />}
+                            {isSelected && (
+                              <div
+                                style={resizeHandleStyle}
+                                onMouseDown={(e) => onResizeMouseDown(e, el)}
+                              />
+                            )}
                           </div>
                         );
                       }
 
-
-                      if (el.type === "rect" || el.type === "circle" || el.type === "line") {
+                      if (
+                        el.type === "rect" ||
+                        el.type === "circle" ||
+                        el.type === "line"
+                      ) {
                         return (
                           <div
                             key={el.id}
@@ -677,7 +894,12 @@ export default function BlankEditor() {
                             }}
                             onMouseDown={(e) => onElementMouseDown(e, el)}
                           >
-                            {isSelected && <div style={resizeHandleStyle} onMouseDown={(e) => onResizeMouseDown(e, el)} />}
+                            {isSelected && (
+                              <div
+                                style={resizeHandleStyle}
+                                onMouseDown={(e) => onResizeMouseDown(e, el)}
+                              />
+                            )}
                           </div>
                         );
                       }
@@ -693,40 +915,59 @@ export default function BlankEditor() {
                             }}
                             onMouseDown={(e) => onElementMouseDown(e, el)}
                           >
-                            {isSelected && <div style={resizeHandleStyle} onMouseDown={(e) => onResizeMouseDown(e, el)} />}
+                            {isSelected && (
+                              <div
+                                style={resizeHandleStyle}
+                                onMouseDown={(e) => onResizeMouseDown(e, el)}
+                              />
+                            )}
                           </div>
                         );
                       }
 
-                      return null; // fallback for any unknown type
+                      return null;
                     })}
-
                   </div>
                 </div>
               </div>
 
+              {/* Right info panel (kept) */}
               <div style={{ width: 240 }}>
-                <div className="bg-white p-3 rounded shadow">
+                <div className="rounded bg-white p-3 shadow">
                   <h4 className="font-semibold">Preview / Page Tools</h4>
                   <div className="mt-3 text-sm text-gray-500">
-                    Click an element to select. Double-click text to edit. Drag to move. Drag bottom-right corner to resize.
+                    Click an element to select. Double-click text to edit. Drag
+                    to move. Drag bottom-right corner to resize.
                   </div>
 
-                  {/* Right-side Saved Resumes (kept) - styled to match left sidebar dark theme */}
+                  {/* Example Saved list UI (you can remove visually if you don't want it) */}
                   <div className="mt-4">
                     <h5 className="font-semibold">Saved Resumes</h5>
-                    <div className="mt-2 max-h-56 overflow-auto space-y-2">
+                    <div className="mt-2 max-h-56 space-y-2 overflow-auto">
                       {resumes.length === 0 ? (
-                        <div className="text-sm text-gray-300">No saved resumes</div>
+                        <div className="text-sm text-gray-400">
+                          No saved resumes
+                        </div>
                       ) : (
                         resumes.map((r) => (
-                          <div key={r._id} className="flex justify-between items-center bg-gray-700 p-2 rounded">
-                            <div className="text-sm text-white truncate w-40">{r.name}</div>
+                          <div
+                            key={r._id}
+                            className="flex items-center justify-between rounded bg-gray-700 p-2"
+                          >
+                            <div className="w-40 truncate text-sm text-white">
+                              {r.name}
+                            </div>
                             <div className="flex gap-1">
-                              <button onClick={() => handleEdit(r._id)} className="px-2 py-1 bg-yellow-500 rounded text-white text-sm">
+                              <button
+                                onClick={() => handleEdit(r._id)}
+                                className="rounded bg-yellow-500 px-2 py-1 text-sm text-white"
+                              >
                                 Edit
                               </button>
-                              <button onClick={() => handleDelete(r._id)} className="px-2 py-1 bg-red-600 rounded text-white text-sm">
+                              <button
+                                onClick={() => handleDelete(r._id)}
+                                className="rounded bg-red-600 px-2 py-1 text-sm text-white"
+                              >
                                 Delete
                               </button>
                             </div>
@@ -735,7 +976,6 @@ export default function BlankEditor() {
                       )}
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -745,7 +985,11 @@ export default function BlankEditor() {
                 <button
                   key={p.id}
                   onClick={() => goToPage(i)}
-                  className={`px-3 py-1 text-sm rounded border ${i === currentPageIndex ? "bg-indigo-600 text-white" : "bg-white"}`}
+                  className={`rounded border px-3 py-1 text-sm ${
+                    i === currentPageIndex
+                      ? "bg-indigo-600 text-white"
+                      : "bg-white"
+                  }`}
                 >
                   Page {i + 1}
                 </button>
@@ -785,7 +1029,10 @@ export default function BlankEditor() {
                         fontSize: el.fontSize,
                         fontFamily: el.fontFamily,
                         color: el.color,
-                        background: el.background === "transparent" ? "transparent" : el.background,
+                        background:
+                          el.background === "transparent"
+                            ? "transparent"
+                            : el.background,
                         padding: 6,
                         boxSizing: "border-box",
                       }}
@@ -840,7 +1087,6 @@ export default function BlankEditor() {
                     />
                   );
                 }
-
                 if (el.type === "photo") {
                   return (
                     <div
@@ -857,7 +1103,6 @@ export default function BlankEditor() {
                     />
                   );
                 }
-
                 return null;
               })}
             </div>
@@ -878,6 +1123,17 @@ export default function BlankEditor() {
           }
         }
       `}</style>
+
+      {/* AI Slide-Over */}
+      <AIPanelSlideOver
+        open={showAI}
+        onClose={() => setShowAI(false)}
+        pages={pages}
+        selectedText={
+          currentPage.elements.find((el) => el.id === selectedId)?.text || ""
+        }
+        updateElement={updateElement}
+      />
     </div>
   );
-} 
+}
