@@ -21,6 +21,9 @@ interface Project {
 export interface ResumeData {
   github: string;
   profile: string;
+  address?: string; 
+  country?: string;
+  city?:string;// ✅ Added
   linkedin: string;
   name: string;
   email: string;
@@ -32,6 +35,8 @@ export interface ResumeData {
   languages: string[];
   hobbies: string[];
   skills: string[];
+  links?: { label: string; url: string }[]; // ✅ Added
+
 
   // 🎨 Theme colors
   colors: {

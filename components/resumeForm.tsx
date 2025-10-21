@@ -306,11 +306,12 @@ export default function ResumeForm({ templateId, resumeId }: ResumeFormProps) {
     fetch(`/api/templates/${templateId}`)
       .then((res) => res.json())
       .then((template) => {
-        const sectionLabels =
+        // ✅ FIX: use section IDs, not labels
+        const sectionIds =
           template?.layout?.sections?.map((s: any) =>
-            s.label.toLowerCase()
+            s.id?.toLowerCase()
           ) || [];
-        setAllowedSections(sectionLabels);
+        setAllowedSections(sectionIds);
       })
       .catch((err) =>
         console.error("❌ Error loading template sections:", err)
@@ -479,6 +480,34 @@ export default function ResumeForm({ templateId, resumeId }: ResumeFormProps) {
         onChange={(e) => updateField("phone", e.target.value)}
         className={inputStyle}
       />
+
+      {/* 🆕 Contact Info Section */}
+      {allowedSections.includes("contact") && (
+        <>
+          <h3 className="font-semibold text-gray-900">Contact Information</h3>
+          <input
+            type="text"
+            placeholder="Address"
+            value={data.address || ""}
+            onChange={(e) => updateField("address", e.target.value)}
+            className={inputStyle}
+          />
+          <input
+            type="text"
+            placeholder="City"
+            value={data.city || ""}
+            onChange={(e) => updateField("city", e.target.value)}
+            className={inputStyle}
+          />
+          <input
+            type="text"
+            placeholder="Country"
+            value={data.country || ""}
+            onChange={(e) => updateField("country", e.target.value)}
+            className={inputStyle}
+          />
+        </>
+      )}
 
       {/* 🧩 Conditional Sections */}
       {allowedSections.includes("profile") && (
@@ -679,6 +708,69 @@ export default function ResumeForm({ templateId, resumeId }: ResumeFormProps) {
             }
             className={inputStyle}
           />
+        </>
+      )}
+
+      {/* 🆕 Links Section */}
+      {allowedSections.includes("links") && (
+        <>
+          <h3 className="font-semibold text-gray-900">Links</h3>
+
+          {data.links?.length ? (
+            data.links.map((link, idx) => (
+              <div key={idx} className="space-y-2 border p-2 rounded">
+                <input
+                  type="text"
+                  placeholder="Label (e.g., LinkedIn, GitHub)"
+                  value={link.label || ""}
+                  onChange={(e) => {
+                    const updated = [...(data.links || [])];
+                    updated[idx].label = e.target.value;
+                    updateField("links", updated);
+                  }}
+                  className={inputStyle}
+                />
+
+                <input
+                  type="text"
+                  placeholder="URL (https://...)"
+                  value={link.url || ""}
+                  onChange={(e) => {
+                    const updated = [...(data.links || [])];
+                    updated[idx].url = e.target.value;
+                    updateField("links", updated);
+                  }}
+                  className={inputStyle}
+                />
+
+                {/* Optional: Remove link */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = [...(data.links || [])];
+                    updated.splice(idx, 1);
+                    updateField("links", updated);
+                  }}
+                  className="text-red-600 hover:underline text-sm"
+                >
+                  Remove
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-600 italic">No links added yet.</p>
+          )}
+
+          {/* ➕ Add New Link */}
+          <button
+            type="button"
+            onClick={() =>
+              updateField("links", [...(data.links || []), { label: "", url: "" }])
+            }
+            className="text-blue-600 hover:underline mt-2"
+          >
+            + Add Another Link
+          </button>
         </>
       )}
 
