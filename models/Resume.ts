@@ -68,6 +68,7 @@ export interface IResume extends Document {
   languages?: string[];
   hobbies?: string[];
   pages?: any[];
+  overlay? : any[];
 }
 
 const ResumeSchema: Schema = new Schema(

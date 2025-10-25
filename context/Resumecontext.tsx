@@ -18,6 +18,7 @@ interface Project {
   description: string;
 }
 
+
 export interface ResumeData {
   github: string;
   profile: string;
@@ -36,7 +37,6 @@ export interface ResumeData {
   hobbies: string[];
   skills: string[];
   links?: { label: string; url: string }[]; // ✅ Added
-
 
   // 🎨 Theme colors
   colors: {

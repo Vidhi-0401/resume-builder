@@ -8,6 +8,8 @@ import Template1 from "@/app/templates/template1";
 import Template2 from "@/app/templates/template2";
 import Template3 from "@/app/templates/template3";
 import TemplateRenderer from "@/components/TemplateRenderer";
+import ResumeOverlay from "@/components/ResumeOverlay";
+
 
 export default function ResumeEditor() {
   const { id } = useParams(); // templateId
@@ -16,10 +18,27 @@ export default function ResumeEditor() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [editingResumeId, setEditingResumeId] = useState<string | null>(null);
 
+  // const handlePrint = useReactToPrint({
+  //   contentRef: componentRef,
+  //   documentTitle: "My_Resume",
+  // });
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: "My_Resume",
+    onBeforePrint: async () => {
+      // Hide overlay before printing
+      document.querySelectorAll(".resume-overlay-root").forEach((el) => {
+        (el as HTMLElement).style.display = "none";
+      });
+    },
+    onAfterPrint: async () => {
+      // Restore overlay after printing
+      document.querySelectorAll(".resume-overlay-root").forEach((el) => {
+        (el as HTMLElement).style.display = "";
+      });
+    },
   });
+
 
   // Load templates from DB
   useEffect(() => {
@@ -69,14 +88,101 @@ export default function ResumeEditor() {
         <div className="shadow-lg p-4" ref={componentRef}>
           {renderTemplate()}
         </div>
+
+        <ResumeOverlay targetRef={componentRef} />
+
       </div>
 
       <div className="text-center mt-6">
         <button
           onClick={handlePrint}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg mr-4"
         >
           Download PDF
+        </button>
+
+        <button
+          onClick={() => {
+            const element = componentRef.current;
+            if (!element) return;
+
+            import("docx").then(({ Document, Packer, Paragraph, TextRun }) => {
+              const doc = new Document({
+                sections: [
+                  {
+                    children: [
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: element.innerText || "Your Resume Content",
+                            font: "Arial",
+                            size: 24,
+                          }),
+                        ],
+                      }),
+                    ],
+                  },
+                ],
+              });
+
+              Packer.toBlob(doc).then((blob) => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "My_Resume.docx";
+                a.click();
+                window.URL.revokeObjectURL(url);
+              });
+            });
+          }}
+          className="px-4 py-2 bg-green-600 text-white rounded-lg mr-4"
+        >
+          Download Word
+        </button>
+
+        <button
+          onClick={async () => {
+            const element = componentRef.current;
+            if (!element) return alert("Resume not found!");
+
+            try {
+              const html2canvas = (await import("html2canvas")).default;
+
+              const clone = element.cloneNode(true) as HTMLElement;
+              const allElements = clone.querySelectorAll("*");
+              allElements.forEach((el) => {
+                const style = window.getComputedStyle(el as HTMLElement);
+                (el as HTMLElement).style.color = style.color;
+                (el as HTMLElement).style.backgroundColor = style.backgroundColor;
+              });
+
+              const wrapper = document.createElement("div");
+              wrapper.style.position = "fixed";
+              wrapper.style.left = "-9999px";
+              wrapper.appendChild(clone);
+              document.body.appendChild(wrapper);
+
+              const canvas = await html2canvas(clone, {
+                backgroundColor: "#ffffff",
+                scale: 2,
+                useCORS: true,
+                logging: false,
+              });
+
+              const link = document.createElement("a");
+              link.download = "My_Resume.png";
+              link.href = canvas.toDataURL("image/png");
+              link.click();
+
+              document.body.removeChild(wrapper);
+            } catch (err) {
+              console.error("⚠️ Image generation failed:", err);
+              alert("⚠️ Could not render resume. Please try again.");
+            }
+          }}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg"
+        >
+          Download Image
         </button>
       </div>
 
