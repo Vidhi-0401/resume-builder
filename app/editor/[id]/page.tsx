@@ -26,18 +26,17 @@ export default function ResumeEditor() {
     contentRef: componentRef,
     documentTitle: "My_Resume",
     onBeforePrint: async () => {
-      // Hide overlay before printing
-      document.querySelectorAll(".resume-overlay-root").forEach((el) => {
-        (el as HTMLElement).style.display = "none";
-      });
+      document.querySelectorAll(
+        ".resume-overlay-root, .resume-overlay-fg-root, .resume-overlay-bg-root, .resume-overlay-tools"
+      ).forEach((el) => ((el as HTMLElement).style.display = "none"));
     },
     onAfterPrint: async () => {
-      // Restore overlay after printing
-      document.querySelectorAll(".resume-overlay-root").forEach((el) => {
-        (el as HTMLElement).style.display = "";
-      });
+      document.querySelectorAll(
+        ".resume-overlay-root, .resume-overlay-fg-root, .resume-overlay-bg-root, .resume-overlay-tools"
+      ).forEach((el) => ((el as HTMLElement).style.display = ""));
     },
   });
+
 
 
   // Load templates from DB

@@ -648,7 +648,7 @@ import { HexColorPicker } from "react-colorful";
 import { v4 as uuidv4 } from "uuid";
 import { DraggableEvent, DraggableData } from "react-draggable";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wrench  } from "lucide-react";
+import { Wrench } from "lucide-react";
 
 /**
  * ResumeOverlay.tsx
@@ -666,21 +666,21 @@ import { Wrench  } from "lucide-react";
 type ShapeType = "line" | "rectangle" | "square" | "circle";
 
 type Shape = {
-  id: string;
-  type: ShapeType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotate: number;
-  color: string;
-  border?: string | null;
-  zIndex: number;
+    id: string;
+    type: ShapeType;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotate: number;
+    color: string;
+    border?: string | null;
+    zIndex: number;
 
-  // 🩵 Added these optional fields to match usage below:
-  fillColor?: string;
-  borderColor?: string;
-  borderEnabled?: boolean;
+    // 🩵 Added these optional fields to match usage below:
+    fillColor?: string;
+    borderColor?: string;
+    borderEnabled?: boolean;
 };
 
 
@@ -1167,6 +1167,7 @@ export default function ResumeOverlay({
 
             {/* clones: draggable resume sections */}
             <div style={{ position: "absolute", inset: 0, pointerEvents: "auto", zIndex: 1500 }}>
+                
                 {/* 🟦 Background Shapes (Behind Resume but Draggable + Faintly Visible) */}
                 {shapes.map((shape) => (
                     <Rnd
@@ -1228,7 +1229,11 @@ export default function ResumeOverlay({
             </div>
 
             {/* Floating AI button (clickable) */}
-            <div style={{ position: "fixed", bottom: 22, right: 22, zIndex: 45000, pointerEvents: "auto" }}>
+            <div
+                className="resume-overlay-tools"
+                style={{ position: "fixed", bottom: 22, right: 22, zIndex: 45000, pointerEvents: "auto" }}
+            >
+
                 <motion.button
                     onClick={() => setShowOverlaySidebar((v) => !v)}
                     whileHover={{ scale: 1.04 }}
@@ -1249,7 +1254,7 @@ export default function ResumeOverlay({
                     aria-label="Toggle overlay tools"
                     title="Toggle overlay tools"
                 >
-                    <Wrench  style={{ width: 18, height: 18 }} />
+                    <Wrench style={{ width: 18, height: 18 }} />
                     <span style={{ whiteSpace: "nowrap" }}>{showOverlaySidebar ? "Close Tools" : "Tools"}</span>
                 </motion.button>
             </div>
