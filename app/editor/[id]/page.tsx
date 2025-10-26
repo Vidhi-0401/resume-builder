@@ -1,4 +1,5 @@
 "use client";
+
 import { useParams } from "next/navigation";
 import { ResumeProvider } from "@/context/Resumecontext";
 import ResumeForm from "@/components/resumeForm";
@@ -10,7 +11,6 @@ import Template3 from "@/app/templates/template3";
 import TemplateRenderer from "@/components/TemplateRenderer";
 import ResumeOverlay from "@/components/ResumeOverlay";
 
-
 export default function ResumeEditor() {
   const { id } = useParams(); // templateId
   const componentRef = useRef<HTMLDivElement>(null);
@@ -18,28 +18,59 @@ export default function ResumeEditor() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [editingResumeId, setEditingResumeId] = useState<string | null>(null);
 
-  // const handlePrint = useReactToPrint({
-  //   contentRef: componentRef,
-  //   documentTitle: "My_Resume",
-  // });
+  // ✅ Updated handlePrint — now includes overlay images in PDF
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: "My_Resume",
     onBeforePrint: async () => {
-      document.querySelectorAll(
-        ".resume-overlay-root, .resume-overlay-fg-root, .resume-overlay-bg-root, .resume-overlay-tools"
-      ).forEach((el) => ((el as HTMLElement).style.display = "none"));
+      // Hide overlay tools only
+      document
+        .querySelectorAll(".resume-overlay-tools")
+        .forEach((el) => ((el as HTMLElement).style.display = "none"));
+
+      // Clone all draggable overlay images into the resume area
+      const fgLayer = document.querySelector(".resume-overlay-fg-root");
+      const resumeArea = componentRef.current;
+
+      if (fgLayer && resumeArea) {
+        // Remove old print clones if any
+        resumeArea.querySelectorAll(".print-overlay-img").forEach((el) => el.remove());
+
+        fgLayer.querySelectorAll("img").forEach((imgEl) => {
+          const clone = imgEl.cloneNode(true) as HTMLImageElement;
+          const parentRnd = imgEl.closest(".react-draggable, .react-rnd");
+          const rect = parentRnd?.getBoundingClientRect();
+          const resumeRect = resumeArea.getBoundingClientRect();
+
+          if (rect && resumeRect) {
+            Object.assign(clone.style, {
+              position: "absolute",
+              left: `${rect.left - resumeRect.left}px`,
+              top: `${rect.top - resumeRect.top}px`,
+              width: `${rect.width}px`,
+              height: `${rect.height}px`,
+              objectFit: "cover",
+              borderRadius: (imgEl as HTMLElement).style.borderRadius,
+              zIndex: "0",
+            });
+            clone.classList.add("print-overlay-img");
+            resumeArea.appendChild(clone);
+          }
+        });
+      }
     },
     onAfterPrint: async () => {
-      document.querySelectorAll(
-        ".resume-overlay-root, .resume-overlay-fg-root, .resume-overlay-bg-root, .resume-overlay-tools"
-      ).forEach((el) => ((el as HTMLElement).style.display = ""));
+      // Restore overlay tools and clean up print clones
+      document
+        .querySelectorAll(".resume-overlay-tools")
+        .forEach((el) => ((el as HTMLElement).style.display = ""));
+      componentRef.current
+        ?.querySelectorAll(".print-overlay-img")
+        .forEach((el) => el.remove());
     },
   });
 
-
-
-  // Load templates from DB
+  // 🔄 Load templates from DB
   useEffect(() => {
     fetch("/api/templates")
       .then((res) => res.json())
@@ -47,7 +78,7 @@ export default function ResumeEditor() {
       .catch((err) => console.error("Error fetching templates:", err));
   }, []);
 
-  // Load saved resumes
+  // 🔄 Load saved resumes
   useEffect(() => {
     fetch("/api/resume")
       .then((res) => res.json())
@@ -55,6 +86,7 @@ export default function ResumeEditor() {
       .catch((err) => console.error("Error fetching resumes:", err));
   }, []);
 
+  // 🗑️ Delete resume
   const handleDelete = async (resumeId: string) => {
     const res = await fetch(`/api/resume/${resumeId}`, { method: "DELETE" });
     if (res.ok) {
@@ -64,7 +96,7 @@ export default function ResumeEditor() {
     }
   };
 
-  // 🔄 Decide how to render preview
+  // 🎨 Render selected template
   const renderTemplate = () => {
     if (id === "template1") return <Template1 />;
     if (id === "template2") return <Template2 />;
@@ -84,14 +116,16 @@ export default function ResumeEditor() {
           resumeId={editingResumeId ?? undefined}
         />
 
-        <div className="shadow-lg p-4" ref={componentRef}>
+        {/* Resume Preview Area */}
+        <div className="shadow-lg p-4 relative" ref={componentRef}>
           {renderTemplate()}
         </div>
 
+        {/* Overlay for draggable images */}
         <ResumeOverlay targetRef={componentRef} />
-
       </div>
 
+      {/* ✅ Download Buttons */}
       <div className="text-center mt-6">
         <button
           onClick={handlePrint}
@@ -100,6 +134,7 @@ export default function ResumeEditor() {
           Download PDF
         </button>
 
+        {/* 🟢 Download Word */}
         <button
           onClick={() => {
             const element = componentRef.current;
@@ -139,41 +174,61 @@ export default function ResumeEditor() {
           Download Word
         </button>
 
+        {/* 🟣 Download as Image */}
+        {/* 🟣 Download as Image */}
         <button
           onClick={async () => {
             const element = componentRef.current;
             if (!element) return alert("Resume not found!");
 
             try {
-              const html2canvas = (await import("html2canvas")).default;
+              const htmlToImage = await import("html-to-image");
 
-              const clone = element.cloneNode(true) as HTMLElement;
-              const allElements = clone.querySelectorAll("*");
-              allElements.forEach((el) => {
-                const style = window.getComputedStyle(el as HTMLElement);
-                (el as HTMLElement).style.color = style.color;
-                (el as HTMLElement).style.backgroundColor = style.backgroundColor;
-              });
+              // Clone overlay images into the resume area temporarily (like for PDF)
+              const fgLayer = document.querySelector(".resume-overlay-fg-root");
+              const resumeArea = componentRef.current;
+              let clones: HTMLElement[] = [];
 
-              const wrapper = document.createElement("div");
-              wrapper.style.position = "fixed";
-              wrapper.style.left = "-9999px";
-              wrapper.appendChild(clone);
-              document.body.appendChild(wrapper);
+              if (fgLayer && resumeArea) {
+                fgLayer.querySelectorAll("img").forEach((imgEl) => {
+                  const clone = imgEl.cloneNode(true) as HTMLImageElement;
+                  const parentRnd = imgEl.closest(".react-draggable, .react-rnd");
+                  const rect = parentRnd?.getBoundingClientRect();
+                  const resumeRect = resumeArea.getBoundingClientRect();
 
-              const canvas = await html2canvas(clone, {
+                  if (rect && resumeRect) {
+                    Object.assign(clone.style, {
+                      position: "absolute",
+                      left: `${rect.left - resumeRect.left}px`,
+                      top: `${rect.top - resumeRect.top}px`,
+                      width: `${rect.width}px`,
+                      height: `${rect.height}px`,
+                      objectFit: "cover",
+                      borderRadius: (imgEl as HTMLElement).style.borderRadius,
+                      zIndex: "0",
+                    });
+                    clone.classList.add("print-overlay-img");
+                    resumeArea.appendChild(clone);
+                    clones.push(clone);
+                  }
+                });
+              }
+
+              // Generate PNG using html-to-image
+              const dataUrl = await htmlToImage.toPng(element, {
                 backgroundColor: "#ffffff",
-                scale: 2,
-                useCORS: true,
-                logging: false,
+                pixelRatio: 2,
+                cacheBust: true,
               });
 
+              // Download the PNG
               const link = document.createElement("a");
               link.download = "My_Resume.png";
-              link.href = canvas.toDataURL("image/png");
+              link.href = dataUrl;
               link.click();
 
-              document.body.removeChild(wrapper);
+              // Remove cloned overlay images after export
+              clones.forEach((c) => c.remove());
             } catch (err) {
               console.error("⚠️ Image generation failed:", err);
               alert("⚠️ Could not render resume. Please try again.");
@@ -183,8 +238,10 @@ export default function ResumeEditor() {
         >
           Download Image
         </button>
+
       </div>
 
+      {/* 🔹 Saved Resumes Section */}
       <div className="mt-10 p-6 border-t">
         <h2 className="text-lg font-bold mb-4">Your Saved Resumes</h2>
         {resumes.length === 0 ? (

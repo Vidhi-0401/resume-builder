@@ -719,6 +719,50 @@ export default function ResumeOverlay({
     const [showOverlaySidebar, setShowOverlaySidebar] = useState<boolean>(false);
     const [noBorder, setNoBorder] = useState<boolean>(false);
 
+    // 🖼️ Image upload feature states
+    const [images, setImages] = useState<
+        { id: string; src: string; x: number; y: number; width: number; height: number; shape: "rectangle" | "square" | "circle" }[]
+    >([]);
+    const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+
+    const addImage = (file: File, shape: "rectangle" | "square" | "circle") => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const src = e.target?.result as string;
+            const newImg = {
+                id: uuidv4(),
+                src,
+                x: 50,
+                y: 50,
+                width: shape === "square" ? 120 : 160,
+                height: shape === "circle" ? 120 : 100,
+                shape,
+            };
+            setImages((prev) => [...prev, newImg]);
+            setSelectedImageId(newImg.id);
+        };
+        reader.readAsDataURL(file);
+        
+    };
+
+    // 🗑️ Delete image using keyboard key (Delete or Backspace)
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (
+      (e.key === "Delete" || e.key === "Backspace") &&
+      selectedImageId &&
+      document.activeElement === document.body // not typing into input
+    ) {
+      setImages((prev) => prev.filter((img) => img.id !== selectedImageId));
+      setSelectedImageId(null);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [selectedImageId]);
+
+
     // create two DOM roots inside targetRef:
     // - bg (prepended) => visually behind resume content
     // - fg (appended)  => handles interactions (transparent RnDs etc.)
@@ -1031,6 +1075,60 @@ export default function ResumeOverlay({
                             </button>
                         </section>
 
+                        {/* 🖼️ Image Upload & Shapes */}
+                        <section style={{ marginTop: 18 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>Upload Image</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                id="image-upload-input"
+                                style={{ display: "none" }}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) addImage(file, "rectangle");
+                                }}
+                            />
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                    style={glassBtnStyle}
+                                    onClick={() => document.getElementById("image-upload-input")?.click()}
+                                >
+                                    📁 Upload (Rect)
+                                </button>
+                                <button
+                                    style={glassBtnStyle}
+                                    onClick={() => {
+                                        const input = document.createElement("input");
+                                        input.type = "file";
+                                        input.accept = "image/*";
+                                        input.onchange = (e: any) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) addImage(file, "square");
+                                        };
+                                        input.click();
+                                    }}
+                                >
+                                    🟦 Square
+                                </button>
+                                <button
+                                    style={glassBtnStyle}
+                                    onClick={() => {
+                                        const input = document.createElement("input");
+                                        input.type = "file";
+                                        input.accept = "image/*";
+                                        input.onchange = (e: any) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) addImage(file, "circle");
+                                        };
+                                        input.click();
+                                    }}
+                                >
+                                    ⚪ Circle
+                                </button>
+                            </div>
+                        </section>
+
+
                         <div style={{ height: 36 }} />
                     </div>
                 </motion.div>
@@ -1167,7 +1265,7 @@ export default function ResumeOverlay({
 
             {/* clones: draggable resume sections */}
             <div style={{ position: "absolute", inset: 0, pointerEvents: "auto", zIndex: 1500 }}>
-                
+
                 {/* 🟦 Background Shapes (Behind Resume but Draggable + Faintly Visible) */}
                 {shapes.map((shape) => (
                     <Rnd
@@ -1224,6 +1322,98 @@ export default function ResumeOverlay({
                             }}
                         />
                     </Rnd>
+                ))}
+                {/* 🖼️ Uploaded draggable images */}
+                {images.map((img) => (
+                    <Rnd
+                        key={img.id}
+                        size={{ width: img.width, height: img.height }}
+                        position={{ x: img.x, y: img.y }}
+                        bounds="parent"
+                        onDragStart={(e: DraggableEvent, _data: DraggableData) => {
+                            e.stopPropagation();
+                            setSelectedImageId(img.id);
+                        }}
+                        onDragStop={(_e: DraggableEvent, d: DraggableData) => {
+                            setImages((prev) =>
+                                prev.map((i) =>
+                                    i.id === img.id
+                                        ? { ...i, x: Math.round(d.x), y: Math.round(d.y) }
+                                        : i
+                                )
+                            );
+                        }}
+                        onResizeStop={(
+                            _e: MouseEvent | TouchEvent,
+                            _dir: any,
+                            ref: HTMLElement,
+                            _delta: any,
+                            pos: { x: number; y: number }
+                        ) => {
+                            setImages((prev) =>
+                                prev.map((i) =>
+                                    i.id === img.id
+                                        ? {
+                                            ...i,
+                                            width: Math.round(ref.offsetWidth),
+                                            height: Math.round(ref.offsetHeight),
+                                            x: Math.round(pos.x),
+                                            y: Math.round(pos.y),
+                                        }
+                                        : i
+                                )
+                            );
+                        }}
+                        enableResizing={{
+                            top: true,
+                            right: true,
+                            bottom: true,
+                            left: true,
+                            topRight: true,
+                            bottomRight: true,
+                            bottomLeft: true,
+                            topLeft: true,
+                        }}
+                        dragGrid={[1, 1]}
+                        resizeGrid={[1, 1]}
+                        style={{
+                            zIndex: selectedImageId === img.id ? 2000 : 1500,
+                            border: selectedImageId === img.id ? "1px dashed #fff" : "none",
+                            borderRadius:
+                                img.shape === "circle"
+                                    ? "50%"
+                                    : img.shape === "square"
+                                        ? "4px"
+                                        : "0",
+                            overflow: "hidden",
+                            pointerEvents: "auto",
+                            cursor: "move",
+                            transition: "none",
+                        }}
+                        onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setSelectedImageId(img.id);
+                        }}
+                    >
+                        <img
+                            src={img.src}
+                            alt=""
+                            draggable={false}
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                userSelect: "none",
+                                borderRadius:
+                                    img.shape === "circle"
+                                        ? "50%"
+                                        : img.shape === "square"
+                                            ? "4px"
+                                            : "0",
+                            }}
+                        />
+                    </Rnd>
+
                 ))}
 
             </div>
