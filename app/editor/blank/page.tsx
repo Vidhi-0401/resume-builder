@@ -756,12 +756,26 @@ export default function ResumeBuilderPage() {
     if (!aiAction) return alert("Choose an action");
     setAiLoading(true);
     try {
-      const ctx = {
-        pages,
-        selectedText: selectedTextForAI,
-        jobRole: aiJob,
+      // const ctx = {
+      //   pages,
+      //   selectedText: selectedTextForAI,
+      //   jobRole: aiJob,
+      // };
+      // const txt = await runAI(aiAction, aiSection || "objective", ctx);
+      const safeContext = {
+        selectedText: (selectedTextForAI || "").slice(0, 1500),
+        jobRole: aiJob || "",
+        pageCount: pages?.length || 0,
+        sampleText:
+          pages?.[0]?.elements
+            ?.slice(0, 3)
+            ?.map((e: any) => e?.text || "")
+            ?.filter(Boolean)
+            ?.join("\n")
+            ?.slice(0, 1500) || "",
       };
-      const txt = await runAI(aiAction, aiSection || "objective", ctx);
+     const txt = await runAI(aiAction, aiSection || "objective", safeContext);
+       
       setAiResult(txt);
     } catch (e) {
       setAiResult("AI request failed.");
