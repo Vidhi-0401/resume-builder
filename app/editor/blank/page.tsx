@@ -385,6 +385,10 @@ export default function ResumeBuilderPage() {
   const [zoom, setZoom] = useState(1);
   const [gridOn, setGridOn] = useState(true);
 
+  // NEW: Inline editing state (no alert/prompt)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>("");
+
   const currentPage = pages[currentPageIndex];
 
   /*** Printing ***/
@@ -393,7 +397,7 @@ export default function ResumeBuilderPage() {
 
   /*** Saved docs ***/
   const [saved, setSaved] = useState<ResumeDoc[]>([]);
-  const [editingId, setEditingId] = useState<string | undefined>(undefined);
+  const [editingDocId, setEditingDocId] = useState<string | undefined>(undefined);
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
@@ -401,8 +405,8 @@ export default function ResumeBuilderPage() {
   }, []);
 
   const doc: ResumeDoc = useMemo(
-    () => ({ _id: editingId, name: fileName, templateId: "builder-single", pages }),
-    [editingId, fileName, pages]
+    () => ({ _id: editingDocId, name: fileName, templateId: "builder-single", pages }),
+    [editingDocId, fileName, pages]
   );
 
   const doSave = useCallback(async (d: ResumeDoc) => {
@@ -413,7 +417,7 @@ export default function ResumeBuilderPage() {
       return;
     }
     setSavingState("saved");
-    setEditingId(res._id);
+    setEditingDocId(res._id);
     setSaved((prev) => {
       const exists = prev.find((p) => p._id === res._id);
       if (exists) return prev.map((p) => (p._id === res._id ? { ...res } : p));
@@ -464,6 +468,7 @@ export default function ResumeBuilderPage() {
       return copy;
     });
     clearSelection();
+    setEditingId(null);
   }, [selection, currentPageIndex, setPages, clearSelection]);
 
   const updateElements = useCallback((ids: string[], mut: (e: Elem) => Elem) => {
@@ -507,6 +512,8 @@ export default function ResumeBuilderPage() {
 
   const startMove = (e: React.MouseEvent, id: string, additive: boolean) => {
     e.stopPropagation();
+    // prevent drag while inline editing this element
+    if (editingId === id) return;
     const ids = additive ? Array.from(new Set([...selection, id])) : [id];
     setSelection(ids);
     const starts = ids.map((i) => {
@@ -522,6 +529,7 @@ export default function ResumeBuilderPage() {
     handle: "nw" | "ne" | "sw" | "se"
   ) => {
     e.stopPropagation();
+    if (editingId === id) return;
     const ids = selection.includes(id) ? selection : [id];
     setSelection(ids);
     const startRects = ids.map((i) => {
@@ -533,6 +541,7 @@ export default function ResumeBuilderPage() {
 
   const startRotate = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (editingId === id) return;
     const ids = selection.includes(id) ? selection : [id];
     setSelection(ids);
     const startAngles = ids.map((i) => {
@@ -643,6 +652,11 @@ export default function ResumeBuilderPage() {
     const onKey = (e: KeyboardEvent) => {
       const cmd = e.metaKey || e.ctrlKey;
       if (e.key === "Escape") {
+        // if editing, exit edit mode first
+        if (editingId) {
+          setEditingId(null);
+          return;
+        }
         clearSelection();
       }
       if (cmd && e.key.toLowerCase() === "z") {
@@ -650,6 +664,9 @@ export default function ResumeBuilderPage() {
         if (e.shiftKey) redo();
         else undo();
       }
+      // skip element move shortcuts if currently typing inline
+      if (editingId) return;
+
       if (!selection.length) return;
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
@@ -683,7 +700,7 @@ export default function ResumeBuilderPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selection, removeSelected, updateElements, gridOn, undo, redo, setPages, currentPageIndex, clearSelection]);
+  }, [selection, removeSelected, updateElements, gridOn, undo, redo, setPages, currentPageIndex, clearSelection, editingId]);
 
   /*******************************
    * Marquee select
@@ -698,6 +715,7 @@ export default function ResumeBuilderPage() {
       const y = (e.clientY - rect.top) / zoom;
       setMarquee({ x, y, w: 0, h: 0 });
       setSelection([]);
+      setEditingId(null);
     }
   };
   const onCanvasMouseMove = (e: React.MouseEvent) => {
@@ -719,6 +737,7 @@ export default function ResumeBuilderPage() {
       .map((el) => el.id);
     setSelection(ids);
     setMarquee(null);
+    setEditingId(null);
   };
 
   /*******************************
@@ -770,6 +789,7 @@ export default function ResumeBuilderPage() {
     setPages(() => p);
     setCurrentPageIndex(0);
     setSelection([]);
+    setEditingId(null);
   };
 
   const addPage = () => setPages((prev) => [...prev, { id: genId("page-"), elements: [] }]);
@@ -793,6 +813,7 @@ export default function ResumeBuilderPage() {
     });
     setCurrentPageIndex((i) => Math.max(0, i - 1));
     setSelection([]);
+    setEditingId(null);
   };
 
   /*******************************
@@ -931,9 +952,10 @@ export default function ResumeBuilderPage() {
                         if (!res) return alert("Failed to load");
                         setPages(() => (res.pages?.length ? res.pages.map(migratePage) : [{ id: genId("page-"), elements: [] }]));
                         setFileName(res.name || "Untitled Resume");
-                        setEditingId(res._id);
+                        setEditingDocId(res._id);
                         setCurrentPageIndex(0);
                         setSelection([]);
+                        setEditingId(null);
                       }}
                       className="rounded bg-yellow-600 px-2 py-1"
                     >Edit</button>
@@ -944,12 +966,13 @@ export default function ResumeBuilderPage() {
                         const ok = await deleteResume(r._id);
                         if (!ok) return alert("Delete failed");
                         setSaved((prev) => prev.filter((x) => x._id !== r._id));
-                        if (editingId === r._id) {
-                          setEditingId(undefined);
+                        if (editingDocId === r._id) {
+                          setEditingDocId(undefined);
                           setPages(() => [{ id: genId("page-"), elements: [] }]);
                           setFileName("Untitled Resume");
                           setCurrentPageIndex(0);
                           setSelection([]);
+                          setEditingId(null);
                         }
                       }}
                       className="rounded bg-red-600 px-2 py-1"
@@ -978,7 +1001,7 @@ export default function ResumeBuilderPage() {
         <main className="md:col-span-3 flex items-start gap-4">
           {/* Canvas */}
           <div className="flex-1">
-            <div className="mb-2 text-sm text-gray-400">Canvas (drag, resize corners, rotate dot; Shift+Click to multi-select; arrows to nudge)</div>
+            <div className="mb-2 text-sm text-gray-400">Canvas (drag, resize corners, rotate dot; Double‑click to edit inline; Shift+Click to multi-select; arrows to nudge)</div>
             <div
               className="mx-auto bg-white ring-1 ring-gray-700"
               style={{ width: A4.w * zoom, height: A4.h * zoom, position: "relative", overflow: "hidden" }}
@@ -1028,7 +1051,8 @@ export default function ResumeBuilderPage() {
                     background: el.type === "text" ? (el.background || "transparent") : el.background,
                   };
 
-                  const selectionHandles = selected && !el.locked && (
+                  const showHandles = selected && !el.locked && editingId !== el.id;
+                  const selectionHandles = showHandles && (
                     <>
                       <ResizeHandle pos="nw" onMouseDown={(e) => startResize(e, el.id, "nw")} />
                       <ResizeHandle pos="ne" onMouseDown={(e) => startResize(e, el.id, "ne")} />
@@ -1039,6 +1063,7 @@ export default function ResumeBuilderPage() {
                   );
 
                   if (el.type === "text") {
+                    const isEditing = editingId === el.id;
                     return (
                       <div key={el.id} style={wrapStyle}>
                         <div
@@ -1046,29 +1071,61 @@ export default function ResumeBuilderPage() {
                           onMouseDown={(e) => startMove(e, el.id, e.shiftKey)}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
-                            const newText = prompt("Edit text", el.text || "") ?? el.text;
-                            if (newText !== undefined) updateElements([el.id], (x) => ({ ...x, text: newText }));
+                            setEditingId(el.id);
+                            setEditingValue(el.text || "");
+                            setSingleSelection(el.id);
                           }}
                         >
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              color: el.color,
-                              fontSize: el.fontSize,
-                              fontFamily: el.fontFamily,
-                              fontWeight: el.fontWeight,
-                              lineHeight: el.lineHeight,
-                              letterSpacing: el.letterSpacing,
-                              textAlign: el.textAlign,
-                              padding: el.padding,
-                              overflow: "hidden",
-                              whiteSpace: "pre-wrap",
-                              background: "transparent",
-                            }}
-                          >
-                            {el.text}
-                          </div>
+                          {isEditing ? (
+                            <textarea
+                              value={editingValue}
+                              onChange={(e) => {
+                                setEditingValue(e.target.value);
+                                // real-time update
+                                updateElements([el.id], (x) => ({ ...x, text: e.target.value }));
+                              }}
+                              autoFocus
+                              onBlur={() => setEditingId(null)}
+                              onKeyDown={(e) => {
+                                if ((e.key === "Enter" && (e.metaKey || e.ctrlKey)) || e.key === "Escape") {
+                                  e.preventDefault();
+                                  setEditingId(null);
+                                }
+                              }}
+                              className="h-full w-full resize-none border-none bg-transparent p-0 outline-none"
+                              style={{
+                                color: el.color,
+                                fontSize: el.fontSize,
+                                fontFamily: el.fontFamily,
+                                fontWeight: el.fontWeight,
+                                lineHeight: el.lineHeight,
+                                letterSpacing: el.letterSpacing,
+                                textAlign: el.textAlign,
+                                padding: el.padding,
+                                whiteSpace: "pre-wrap",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                color: el.color,
+                                fontSize: el.fontSize,
+                                fontFamily: el.fontFamily,
+                                fontWeight: el.fontWeight,
+                                lineHeight: el.lineHeight,
+                                letterSpacing: el.letterSpacing,
+                                textAlign: el.textAlign,
+                                padding: el.padding,
+                                overflow: "hidden",
+                                whiteSpace: "pre-wrap",
+                                background: "transparent",
+                              }}
+                            >
+                              {el.text}
+                            </div>
+                          )}
                           {selectionHandles}
                         </div>
                       </div>
@@ -1138,6 +1195,7 @@ export default function ResumeBuilderPage() {
                   }
 
                   if (el.type === "tag") {
+                    const isEditing = editingId === el.id;
                     return (
                       <div key={el.id} style={wrapStyle}>
                         <div
@@ -1154,11 +1212,32 @@ export default function ResumeBuilderPage() {
                           onMouseDown={(e) => startMove(e, el.id, e.shiftKey)}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
-                            const t = prompt("Edit tag", el.text || "Tag");
-                            if (t !== null) updateElements([el.id], (x) => ({ ...x, text: t }));
+                            setEditingId(el.id);
+                            setEditingValue(el.text || "");
+                            setSingleSelection(el.id);
                           }}
                         >
-                          {el.text}
+                          {isEditing ? (
+                            <input
+                              value={editingValue}
+                              onChange={(e) => {
+                                setEditingValue(e.target.value);
+                                updateElements([el.id], (x) => ({ ...x, text: e.target.value }));
+                              }}
+                              autoFocus
+                              onBlur={() => setEditingId(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === "Escape") {
+                                  e.preventDefault();
+                                  setEditingId(null);
+                                }
+                              }}
+                              className="w-full bg-transparent text-center outline-none"
+                              style={{ padding: el.padding, color: "#111827", fontWeight: 600 }}
+                            />
+                          ) : (
+                            el.text
+                          )}
                           {selectionHandles}
                         </div>
                       </div>
@@ -1192,6 +1271,7 @@ export default function ResumeBuilderPage() {
                   onClick={() => {
                     setCurrentPageIndex(i);
                     setSelection([]);
+                    setEditingId(null);
                   }}
                   className={`rounded px-2 py-1 text-sm ring-1 ring-gray-700 ${i === currentPageIndex ? "bg-indigo-600" : "bg-gray-800"}`}
                 >
@@ -1445,8 +1525,8 @@ export default function ResumeBuilderPage() {
         1) Ensure Tailwind + App Router are set up. Install deps: `npm i react-to-print marked`.
         2) Create file at app/resume-builder/page.tsx and paste this code.
         3) Start dev server. Add text/rect/photo. Drag & resize. Shift+click to multi-select.
-        4) Use Inspector to style. Try templates. Save (uses /api/resume). Export PDF.
-        5) Open AI panel, choose action, run, then Apply to insert/replace text.
+        4) Double‑click any text or tag to edit inline (Esc/⌘+Enter to finish).
+        5) Use Inspector to style. Try templates. Save (uses /api/resume). Export PDF.
         6) Shortcuts: Esc clears selection; Cmd/Ctrl+Z / Shift+Cmd/Ctrl+Z; arrows nudge (Shift=10px); Delete removes.
       */}
     </div>
